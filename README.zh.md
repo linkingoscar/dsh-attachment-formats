@@ -1,7 +1,7 @@
 # dsh-attachment-formats — 附件格式扩展（Codex 风格兼容）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.6.3-informational)](#)
+[![version](https://img.shields.io/badge/version-0.6.4-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -233,8 +233,14 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 
 ## 发布版本
 
+- **[v0.6.4](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.4)**
+  （最新）—— 会话归属正确与零拷贝校验：附件按 shell 当前会话归属（不再出现
+  卡片/图片跑到别的对话框）；转换图片等当前会话空闲再投喂；工作区零拷贝改
+  「文件名 + 字节数 + 完整 SHA-256」同源确认（杜绝同名同大小静默替换），
+  >16MB 直接拒绝；INDEX 单元格转义、重建按工作区串行化；缓存命中保留
+  source 口径字段；旧版 Office manifest 标注 `libreoffice+builtin` 引擎。
 - **[v0.6.3](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.3)**
-  （最新）—— 缓存生命周期加固：v0.6.1 的 8-hex 遗留缓存目录在清理/清空时
+  —— 缓存生命周期加固：v0.6.1 的 8-hex 遗留缓存目录在清理/清空时
   一并扫除（不再有不可见孤儿）；JSON 转存区分源文本与落盘产物尺寸（分流
   按产物口径）；缓存命中降级为索引卡时惰性补齐页面图；INDEX.md 改由合法
   manifest 全量重建（无 ghost 行、转存时间列修复）；旧版 .doc/.xls/.ppt

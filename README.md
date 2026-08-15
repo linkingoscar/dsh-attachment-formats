@@ -1,7 +1,7 @@
 # dsh-attachment-formats — Attachment Format Expansion (Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.6.3-informational)](#)
+[![version](https://img.shields.io/badge/version-0.6.4-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -264,8 +264,17 @@ afterwards).
 
 ## Releases
 
+- **[v0.6.4](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.4)**
+  (latest) — session-correct attachments & verified zero-copy: attachments now
+  attribute to the shell's current conversation (no more cards/images landing in
+  another dialog); converted images wait for the current conversation to become
+  idle before the synthetic drop; workspace zero-copy is confirmed by name + size +
+  full SHA-256 (no silent substitution), >16MB is rejected outright; INDEX.md cells
+  are escaped, INDEX rebuilds are serialized per workspace, cache hits keep the
+  source-count fields, legacy-Office manifests carry the `libreoffice+builtin`
+  engine label.
 - **[v0.6.3](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.3)**
-  (latest) — cache lifecycle hardening: v0.6.1 8-hex cache dirs are now swept by
+  — cache lifecycle hardening: v0.6.1 8-hex cache dirs are now swept by
   cleanup/clear (no invisible orphans), JSON spill keeps source vs artifact sizes
   separate (tiering uses the spilled `doc.*` size), page images materialize lazily
   when a cache hit downgrades to index mode, INDEX.md is fully rebuilt from live

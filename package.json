@@ -1,6 +1,6 @@
 {
   "name": "dsh-attachment-formats",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "Codex-style attachment format expansion for the DeepSeek Harness Web GUI: PDF text-layer extraction (pymupdf4llm / pdfjs), Office text extraction, long-document spill + index cards, scanned-PDF OCR (tesseract.js), and browser-decodable images to PNG.",
   "type": "module",
   "main": "lib/index.js",
