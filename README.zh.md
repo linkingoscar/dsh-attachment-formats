@@ -1,7 +1,7 @@
 # dsh-attachment-formats — 附件格式扩展（Codex 风格兼容）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.9.0-informational)](#)
+[![version](https://img.shields.io/badge/version-0.10.0-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -237,6 +237,13 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 
 ## 发布版本
 
+- **[v0.10.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.10.0)**
+  （最新）—— 对标 Codex 体验 + 加固：分块上传进度（XHR）与宿主 job 通道
+  （渲染/OCR 页级进度实时进状态条）；卡片点击打开页图灯箱（新增防路径穿越的
+  `/api/attach-formats/file` 路由）；大文件 base64 编码挪入 Web Worker
+  （同步回退）；密钥写路径接官方 `ctx.credentials.set`（配置文件只留引用）；
+  文档解析服务 URL SSRF 防护（仅 http/https、禁 userinfo）；`verify:build`
+  产物新鲜度门禁。
 - **[v0.9.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.9.0)**
   （最新）—— 对齐 dsh 哲学：转换缓存默认迁 `$DSH_HOME/storages/attachment-docs/<workspaceHash>/`
   （工作区模式改为 opt-in；旧 `cwd/.dsh-attachments` 每工作区自动一次性迁移）；

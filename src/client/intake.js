@@ -246,7 +246,29 @@ async function intake(files, explicitSessionId) {
 						label: file.name,
 						detail: kind === "pdf" ? "正在提取文字层…" : kind === "tiff" ? "正在转换为图片…" : "正在提取文本…"
 					});
-					const result = await convertRemote(file, kind, cwd, sessionId, directLimit);
+					// PDF 走主机 job 通道：轮询页级进度（渲染/OCR 页号）；其余仅上传进度
+					const jobId = kind === "pdf" ? `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : undefined;
+					let pollTimer = null;
+					if (jobId !== undefined) {
+						pollTimer = setInterval(async () => {
+							try {
+								const r = await fetch(`/api/attach-formats/progress?jobId=${encodeURIComponent(jobId)}`);
+								const p = await r.json();
+								if (p?.found === true && p.phase === "working" && p.label) {
+									setBus({ phase: "working", label: file.name, detail: p.label });
+								}
+							} catch { /* 轮询失败忽略：主请求自有结果 */ }
+						}, 600);
+					}
+					let result;
+					try {
+						result = await convertRemote(file, kind, cwd, sessionId, directLimit, {
+							jobId,
+							onUploadPercent: (pct) => setBus({ phase: "working", label: file.name, detail: `上传中 ${pct}%` })
+						});
+					} finally {
+						if (pollTimer !== null) clearInterval(pollTimer);
+					}
 					if (result.kind === "images") {
 						for (const image of result.images) {
 							images.push(new File([b64ToBytes(image.data)], image.name, { type: image.mediaType }));
@@ -267,14 +289,17 @@ async function intake(files, explicitSessionId) {
 							name: file.name,
 							kind: "card",
 							text: result.card,
-							tagExtra
+							tagExtra,
+							preview: result.hasPageImages === true && typeof result.id === "string" ? { id: result.id, pageCount: result.pageCount ?? 0 } : null
 						});
 					}
 					break;
 				}
 				case "tiff": {
 					setBus({ phase: "working", label: file.name, detail: "正在转换为图片…" });
-					const result = await convertRemote(file, kind, cwd, sessionId, directLimit);
+					const result = await convertRemote(file, kind, cwd, sessionId, directLimit, {
+						onUploadPercent: (pct) => setBus({ phase: "working", label: file.name, detail: `上传中 ${pct}%` })
+					});
 					if (result.kind === "images") {
 						for (const image of result.images) {
 							images.push(new File([b64ToBytes(image.data)], image.name, { type: image.mediaType }));

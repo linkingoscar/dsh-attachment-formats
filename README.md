@@ -1,7 +1,7 @@
 # dsh-attachment-formats — Attachment Format Expansion (Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.9.0-informational)](#)
+[![version](https://img.shields.io/badge/version-0.10.0-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -273,6 +273,14 @@ afterwards).
 
 ## Releases
 
+- **[v0.10.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.10.0)**
+  (latest) — Codex-parity UX + hardening: chunked upload progress (XHR) and a
+  host-side job channel streaming per-page render/OCR progress into the status
+  bar; card click opens a page-image lightbox (new path-traversal-guarded
+  `/api/attach-formats/file` route); large-file base64 encoding moved into a
+  Web Worker with sync fallback; secrets written through the official
+  `ctx.credentials.set` seam (config keeps references, not values); doc-server
+  URL SSRF guard (http/https only, no userinfo); `verify:build` freshness gate.
 - **[v0.9.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.9.0)**
   (latest) — dsh-philosophy alignment: conversion cache moves to
   `$DSH_HOME/storages/attachment-docs/<workspaceHash>/` by default (workspace

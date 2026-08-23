@@ -517,8 +517,53 @@ console.log("\n== 非 POST ==");
   check("status 405", status === 405, `got ${status}`);
 }
 
-console.log("\n== v0.9 缓存迁 DSH_HOME（ensureCacheMigrated）==");
+console.log("\n== v0.10 进度/预览/SSRF/CAS 路由 ==");
 {
+  async function callGet(path) {
+    const handler = routes.find((r) => r.path === path.split("?")[0]).handler;
+    const req = new Readable({ read() { this.push(null); } });
+    req.method = "GET";
+    req.url = path;
+    let status = 0;
+    let body = "";
+    const res = { writeHead(c) { status = c; }, end(b) { body = String(b ?? ""); } };
+    await handler(req, res);
+    return { status, body: body === "" ? null : JSON.parse(body) };
+  }
+  const p1 = await callGet("/api/attach-formats/progress?jobId=nope");
+  check("progress 无 job → found:false", p1.body?.found === false);
+  const f1 = await callGet(`/api/attach-formats/file?sessionId=test-session&cwd=${encodeURIComponent(testCwd)}&id=..%2F..%2Fetc&name=pages%2Fp01.png`);
+  check("file 预览：路径穿越 id → 404", f1.status === 404);
+  const f2 = await callGet(`/api/attach-formats/file?sessionId=test-session&cwd=${encodeURIComponent(testCwd)}&id=a1b2c3d4e5f60718&name=..%2F..%2Fsecrets`);
+  check("file 预览：路径穿越 name → 404", f2.status === 404);
+  const s1 = await callGet("/api/attach-formats/settings?sessionId=test-session");
+  check("settings GET 携带 revision", s1.body?.ok === true && typeof s1.body?.revision === "number");
+  async function callSettingsPost(body) {
+    const handler = routes.find((r) => r.path === "/api/attach-formats/settings").handler;
+    const req = new Readable({ read() { this.push(Buffer.from(JSON.stringify(body))); this.push(null); } });
+    req.method = "POST";
+    req.url = "/api/attach-formats/settings";
+    let status = 0;
+    let out = "";
+    const res = { writeHead(c) { status = c; }, end(b) { out = String(b ?? ""); } };
+    await handler(req, res);
+    return { status, body: out === "" ? null : JSON.parse(out) };
+  }
+  const w1 = await callSettingsPost({ sessionId: "test-session", ocr: { provider: "deepseek" }, expectedRevision: s1.body.revision });
+  check("settings 正确 revision 保存", w1.status === 200 && w1.body?.revision === s1.body.revision + 1);
+  const w2 = await callSettingsPost({ sessionId: "test-session", engine: "python", expectedRevision: s1.body.revision });
+  check("settings 旧 revision → 409 settings-conflict", w2.status === 409 && w2.body?.error?.code === "settings-conflict");
+  const { validateDocServerUrl } = await import("../lib/convert/doc-server.js");
+  let ssrfThrew = false;
+  try { validateDocServerUrl("file:///etc/passwd"); } catch { ssrfThrew = true; }
+  check("SSRF：file:// 被拒", ssrfThrew);
+  ssrfThrew = false;
+  try { validateDocServerUrl("http://user:pass@host:8000"); } catch { ssrfThrew = true; }
+  check("SSRF：userinfo 被拒", ssrfThrew);
+  check("SSRF：localhost 放行（自建服务主场景）", validateDocServerUrl("http://127.0.0.1:8000") === "http://127.0.0.1:8000");
+}
+
+console.log("\n== v0.9 缓存迁 DSH_HOME（ensureCacheMigrated）==");{
   const { mkdirSync, writeFileSync } = await import("node:fs");
   const legacyCwd = mkdtempSync(join(tmpdir(), "dsh-attach-legacy-"));
   const legacyId = "a1b2c3d4e5f60718";

@@ -144,25 +144,39 @@ async function resolveWorkspaceRef(file, cwd, sessionId) {
 		return null;
 	}
 }
-async function convertRemote(file, kind, cwd, sessionId, directLimit) {
-	const data = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+async function convertRemote(file, kind, cwd, sessionId, directLimit, hooks = {}) {
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	// 大文件 base64 编码挪 Worker（主线程只做零拷贝 transfer），不可用回退同步
+	const data = await bytesToBase64Async(bytes);
 	let response;
 	try {
-		response = await fetch(ROUTE_PATH, {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({
+		response = await new Promise((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			xhr.open("POST", ROUTE_PATH);
+			xhr.responseType = "text";
+			// 上传进度：base64 体的 0-90% 区间（响应解析占剩余心智）
+			if (typeof hooks.onUploadPercent === "function") {
+				xhr.upload.onprogress = (event) => {
+					if (event.lengthComputable) {
+						hooks.onUploadPercent(Math.min(99, Math.round((event.loaded / event.total) * 90)));
+					}
+				};
+			}
+			xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, text: xhr.response });
+			xhr.onerror = () => reject(new Error("network"));
+			xhr.send(JSON.stringify({
 				cwd,
 				sessionId,
 				directLimitChars: directLimit,
+				jobId: hooks.jobId,
 				files: [{ name: file.name, kind, data }]
-			})
+			}));
 		});
 	} catch {
 		throw new Error("转换服务不可用（主机插件未加载？）");
 	}
 	if (!response.ok) throw new Error(`转换服务错误 (HTTP ${response.status})`);
-	const payload = await response.json();
+	const payload = JSON.parse(response.text);
 	if (!payload || payload.ok !== true) {
 		throw new Error(payload?.error?.message ?? "转换服务返回异常");
 	}
@@ -170,6 +184,42 @@ async function convertRemote(file, kind, cwd, sessionId, directLimit) {
 	if (result === null || result === undefined) throw new Error("转换服务未返回结果");
 	if (result.kind === "error") throw new Error(result.error?.message ?? "转换失败");
 	return result;
+}
+
+// ---- base64 编码 Worker（大文件不卡主线程；vm/老环境回退同步）------------
+const B64_WORKER_SRC = "self.onmessage=(e)=>{try{const u8=new Uint8Array(e.data.buf);let binary=\"\";const chunk=0x8000;for(let o=0;o<u8.length;o+=chunk)binary+=String.fromCharCode.apply(null,u8.subarray(o,o+chunk));self.postMessage({b64:btoa(binary)});}catch(err){self.postMessage({err:String(err&&err.message||err)});}};";
+let b64WorkerUrl = null;
+
+/**
+ * Worker 内做 base64 编码；环境不支持 Worker（vm 冒烟/老浏览器）时回退同步。
+ * @param {Uint8Array} bytes
+ * @returns {Promise<string>}
+ */
+function bytesToBase64Async(bytes) {
+	if (typeof Worker === "undefined" || typeof Blob === "undefined" || typeof URL === "undefined" || !URL.createObjectURL) {
+		return Promise.resolve(bytesToBase64(bytes));
+	}
+	try {
+		if (b64WorkerUrl === null) {
+			b64WorkerUrl = URL.createObjectURL(new Blob([B64_WORKER_SRC], { type: "text/javascript" }));
+		}
+		return new Promise((resolve) => {
+			const worker = new Worker(b64WorkerUrl);
+			worker.onmessage = (event) => {
+				worker.terminate();
+				if (event.data && typeof event.data.b64 === "string") resolve(event.data.b64);
+				else resolve(bytesToBase64(bytes));
+			};
+			worker.onerror = () => {
+				worker.terminate();
+				resolve(bytesToBase64(bytes)); // Worker 失败：同步回退，绝不丢内容
+			};
+			const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+			worker.postMessage({ buf: buf }, [buf]);
+		});
+	} catch {
+		return Promise.resolve(bytesToBase64(bytes));
+	}
 }
 
 
