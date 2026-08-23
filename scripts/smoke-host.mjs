@@ -338,11 +338,11 @@ console.log("\n== 修复验证：v0.6.1 sha-8 遗留目录被清理（不再成�
   wf2(join(legacyRoot, "a1b2c3d4", "doc.md"), "legacy");
   await cleanupCache(legacyRoot);
   check("cleanup 删除 sha-8 遗留目录", !existsSync(join(legacyRoot, "a1b2c3d4")));
-  // clearCache 收的是工作区 cwd（内部解析 .dsh-attachments）
+  // clearCache 收的是工作区 cwd（内部解析 .dsh-attachments）；显式 workspace 模式
   const legacyWorkspace = join(temp, "legacy-workspace");
   mkdirSync(join(legacyWorkspace, ".dsh-attachments", "deadbeef"), { recursive: true });
   wf2(join(legacyWorkspace, ".dsh-attachments", "deadbeef", "doc.md"), "legacy");
-  const clearedLegacy = await clearCache(legacyWorkspace);
+  const clearedLegacy = await clearCache(legacyWorkspace, "workspace");
   check("clear 删除 sha-8 遗留目录", clearedLegacy >= 1 && !existsSync(join(legacyWorkspace, ".dsh-attachments", "deadbeef")), `cleared=${clearedLegacy}`);
 }
 

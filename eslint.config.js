@@ -3,10 +3,12 @@ import globals from "globals";
 
 export default [
   {
-    ignores: ["node_modules/**", "temp/**", ".venv/**", "vendor/**", "dist/**", "build/**"]
+    // lib/client.js 是 tsdown 构建产物（打包后无 import 语句，no-undef 必然误报）；
+    // 源码真身在 src/client/，由下方 lib 规则同款配置覆盖。
+    ignores: ["node_modules/**", "temp/**", ".venv/**", "vendor/**", "dist/**", "build/**", "lib/client.js"]
   },
   {
-    files: ["lib/**/*.js", "scripts/**/*.mjs"],
+    files: ["lib/**/*.js", "src/**/*.js", "scripts/**/*.mjs"],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",

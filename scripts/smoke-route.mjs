@@ -21,6 +21,19 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixturePdf = readFileSync(join(root, "temp", "fixture.pdf"));
 const fixtureDocx = readFileSync(join(root, "temp", "fixture.docx"));
 const testCwd = mkdtempSync(join(tmpdir(), "dsh-attach-test-"));
+// v0.9 隔离：DSH_HOME 指向临时目录（防读写真实用户目录），
+// 并预置 workspace 模式使既有「工作区缓存」断言继续成立。
+const testHome = mkdtempSync(join(tmpdir(), "dsh-attach-home-"));
+const previousDshHome = process.env.DSH_HOME;
+process.env.DSH_HOME = testHome;
+{
+  const { mkdirSync, writeFileSync } = await import("node:fs");
+  mkdirSync(join(testHome, "storages"), { recursive: true });
+  writeFileSync(
+    join(testHome, "storages", "attachment-formats-config.json"),
+    JSON.stringify({ revision: 1, cacheLocation: "workspace" })
+  );
+}
 
 let failures = 0;
 function check(label, ok, extra = "") {
@@ -410,11 +423,11 @@ console.log("\n== v2b 上下文预算分流（directLimitChars）==");
 
 console.log("\n== v2b /attach 命令 ==");
 {
-  const sends = [];
+  const injections = [];
   const agent = {
     session: { header: { cwd: testCwd } },
-    send(message, target, wakeup) {
-      sends.push({ message, target, wakeup });
+    inject(message) {
+      injections.push({ message });
     }
   };
   const invocation = (rawInput) => ({ rawInput, agent });
@@ -424,10 +437,10 @@ console.log("\n== v2b /attach 命令 ==");
   const id = shortHashOf(fixtureLongMd);
   const expanded = await plugin.executeAttachCommand(ctx, invocation(`full ${id}`));
   check("/attach full 成功", expanded.kind === "success");
-  check("发送 next-step 消息", sends.length === 1 && sends[0].target === "next-step" && sends[0].wakeup === false);
-  const text = sends[0]?.message?.content?.[0]?.text ?? "";
+  check("注入非唤醒 next-step 消息", injections.length === 1);
+  const text = injections[0]?.message?.content?.[0]?.text ?? "";
   check("消息含全文与出处", text.includes("[附件全文: 长文档.md") && text.includes("第一节 背景"), text.slice(0, 140));
-  check("消息为 user 角色且带 id", sends[0]?.message?.role === "user" && typeof sends[0]?.message?.id === "string");
+  check("消息为 user 角色且带 id", injections[0]?.message?.role === "user" && typeof injections[0]?.message?.id === "string");
   const missing = await plugin.executeAttachCommand(ctx, invocation("full 不存在的东西"));
   check("/attach full 未命中 → error", missing.kind === "error");
   const badVerb = await plugin.executeAttachCommand(ctx, invocation("explode"));
@@ -504,10 +517,40 @@ console.log("\n== 非 POST ==");
   check("status 405", status === 405, `got ${status}`);
 }
 
+console.log("\n== v0.9 缓存迁 DSH_HOME（ensureCacheMigrated）==");
+{
+  const { mkdirSync, writeFileSync } = await import("node:fs");
+  const legacyCwd = mkdtempSync(join(tmpdir(), "dsh-attach-legacy-"));
+  const legacyId = "a1b2c3d4e5f60718";
+  const legacyDir = join(legacyCwd, ".dsh-attachments", legacyId);
+  mkdirSync(legacyDir, { recursive: true });
+  writeFileSync(join(legacyDir, "doc.md"), "# legacy\n旧目录内容");
+  writeFileSync(join(legacyDir, "manifest.json"), JSON.stringify({
+    kind: "text", sourceName: "旧.md", id: legacyId, schemaVersion: 2,
+    createdAt: new Date().toISOString(), lastAccessedAt: new Date().toISOString(),
+    files: ["doc.md"], docFile: "doc.md", charCount: 10, lineCount: 2
+  }));
+  const { ensureCacheMigrated, resolveCacheRoot, listCachedDocs } = await import("../lib/cache.js");
+  await ensureCacheMigrated(legacyCwd, "home");
+  const { root: homeRoot } = resolveCacheRoot(legacyCwd, "home");
+  const movedManifest = join(homeRoot, legacyId, "manifest.json");
+  check("旧目录已迁 DSH_HOME/storages", existsSync(movedManifest), movedManifest);
+  check("迁移落在 attachment-docs/<wsHash> 下", homeRoot.includes(join("storages", "attachment-docs")));
+  check("旧工作区目录已清理", !existsSync(join(legacyCwd, ".dsh-attachments")));
+  const docs = await listCachedDocs(legacyCwd, "home");
+  check("新根 listCachedDocs 可见迁移文档", docs.length === 1 && docs[0].name === "旧.md", JSON.stringify(docs.map(d => d.name)));
+  const second = await ensureCacheMigrated(legacyCwd, "home");
+  check("二次调用幂等（每 cwd 一次）", second.migrated === false);
+  rmSync(legacyCwd, { recursive: true, force: true });
+}
+
 process.env.DSH_ATTACH_ENGINE = previousEngine ?? undefined;
 process.env.DSH_ATTACH_OCR = previousOcr ?? undefined;
 if (process.env.DSH_ATTACH_ENGINE === undefined) delete process.env.DSH_ATTACH_ENGINE;
 if (process.env.DSH_ATTACH_OCR === undefined) delete process.env.DSH_ATTACH_OCR;
+if (previousDshHome === undefined) delete process.env.DSH_HOME;
+else process.env.DSH_HOME = previousDshHome;
 rmSync(testCwd, { recursive: true, force: true });
+rmSync(testHome, { recursive: true, force: true });
 console.log(`\n${failures === 0 ? "路由测试全部通过 ✅" : `${failures} 项失败 ❌`}`);
 if (failures > 0) process.exitCode = 1;

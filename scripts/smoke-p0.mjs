@@ -350,8 +350,11 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
     docServer: process.env.DSH_ATTACH_DOC_SERVER,
     vlmBase: process.env.DSH_ATTACH_VLM_BASE,
     vlmModel: process.env.DSH_ATTACH_VLM_MODEL,
-    vlmKey: process.env.DSH_ATTACH_VLM_KEY
+    vlmKey: process.env.DSH_ATTACH_VLM_KEY,
+    dshHome: process.env.DSH_HOME
   };
+  // v0.9 隔离：DSH_HOME 指向测试目录，home 模式缓存不落真实用户目录
+  process.env.DSH_HOME = temp;
   const restoreEnv = () => {
     for (const [key, value] of Object.entries(previousEnv)) {
       if (value === undefined) delete process.env[key];
@@ -414,9 +417,9 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
   // ---- 缓存管理路由 ------------------------------------------------------
   // 使用独立 cacheTemp（sessionId=cache-session），与前面转换用例的缓存隔离
   {
-    const { root } = resolveCacheRoot(cacheTemp);
+    const { root } = resolveCacheRoot(cacheTemp, "home");
     const seeded = Buffer.from("缓存管理测试内容");
-    await writeCache({ root, rel: ".dsh-attachments" }, shortHashOf(seeded), "缓存文档.md", "text", [
+    await writeCache({ root, rel: null }, shortHashOf(seeded), "缓存文档.md", "text", [
       { name: "doc.md", data: seeded }
     ], { charCount: seeded.length, lineCount: 1, docFile: "doc.md" });
     const list = await call(`/api/attach-formats/cache?sessionId=cache-session&cwd=${encodeURIComponent(cacheTemp)}`);
@@ -428,13 +431,13 @@ console.log("\n== P2：路由级（doc-server / VLM / 缓存管理 / 零拷贝�
     const afterDelete = await call(`/api/attach-formats/cache?sessionId=cache-session&cwd=${encodeURIComponent(cacheTemp)}`);
     check("cache 删除后为空", afterDelete.body?.docs.length === 0);
     let indexAfterDel = "";
-    try { indexAfterDel = readFileSync(join(cacheTemp, ".dsh-attachments", "INDEX.md"), "utf8"); } catch { /* ignore */ }
+    try { indexAfterDel = readFileSync(join(root, "INDEX.md"), "utf8"); } catch { /* ignore */ }
     check("删除后 INDEX 无 ghost 行", !indexAfterDel.includes("缓存文档.md"), indexAfterDel.slice(0, 200));
-    await writeCache({ root, rel: ".dsh-attachments" }, shortHashOf(seeded), "再种一个.md", "text", [
+    await writeCache({ root, rel: null }, shortHashOf(seeded), "再种一个.md", "text", [
       { name: "doc.md", data: seeded }
     ], { charCount: seeded.length, lineCount: 1, docFile: "doc.md" });
     let indexAfterSeed = "";
-    try { indexAfterSeed = readFileSync(join(cacheTemp, ".dsh-attachments", "INDEX.md"), "utf8"); } catch { /* ignore */ }
+    try { indexAfterSeed = readFileSync(join(root, "INDEX.md"), "utf8"); } catch { /* ignore */ }
     check("重建 INDEX 含再种文档", indexAfterSeed.includes("再种一个.md"), indexAfterSeed.slice(0, 200));
     check("INDEX 含转存时间列", /20\d\d-\d\d-\d\d \d\d:\d\d:\d\d/.test(indexAfterSeed), indexAfterSeed.slice(0, 200));
     const cleared = await call("/api/attach-formats/cache/clear", { method: "POST", body: JSON.stringify({ sessionId: "cache-session", cwd: cacheTemp }) });

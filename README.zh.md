@@ -1,7 +1,7 @@
 # dsh-attachment-formats — 附件格式扩展（Codex 风格兼容）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.6.4-informational)](#)
+[![version](https://img.shields.io/badge/version-0.9.0-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -139,7 +139,8 @@
 - **粘贴**：复制文件后 Ctrl+V 到输入框（或整页粘贴）。
 
 原生图片拖放/粘贴仍由 Harness 内建管线处理；只要一次拖放里混入其它格式，
-本插件接管整个批次（先转换，再以「合成 drop」把产出的图片交还给内建草稿栏）。
+本插件接管整个批次（先转换，再优先经官方注入面把产出的图片挂入当前会话的
+内建草稿栏；旧版宿主回退「合成 drop」）。
 
 ## 架构
 
@@ -175,8 +176,14 @@ projects/dsh-attachment-formats/
 - 分级阈值：全文卡片并入上限 8 万字符（v2b 按上下文余量自适应压低）；缓存
   页图 ≤100 页（1100px 宽，PNG 超单图字节预算回退 JPEG）；扫描件页图上限
   沿用部署限额；OCR 单次 ≤20 页（2000px 宽），置信度 <45 回退页面图。
-- 文档卡片内容在发送瞬间经 DOM 事件桥合并进 React 受控输入框（与原生提交
-  同路径）；图片路径完全独立、不受影响。
+- 转换出的页面图片优先经 Harness 官方按会话注入面挂入草稿栏
+  （dsh ≥ v0.1.1 的 `ctx.conversation.createDraftImages` + `input.addImages`，
+  精确寻址当前会话，杜绝多会话串扰）；旧版宿主回退合成 drop（先等当前会话
+  空闲）。文档卡片在发送瞬间经官方 `setDraft` 写路径并入草稿（phase 门控：
+  仅 plain 相合并，命令认领态绝不污染）；旧版宿主回退 DOM 事件桥（与原生提交
+  同路径）。图片路径完全独立、不受影响。
+- 页面图渲染以宿主规范化字节预算（`normalizationPolicy.maxBytes`）为目标，
+  不再误用源准入上限，避免渲染产物被 dsh ≥ v0.1.1 规范化管线二次压缩。
 - 转换进度/错误显示在输入框上方的临时状态条（`conversation.input.dock`），
   成功 6 秒后自动消失，错误可手动关闭。
 
@@ -220,21 +227,40 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 - 大纲优先用书签目录；无书签的 PDF 回退字号启发式（对无标题样式的文档较弱），
   索引卡仍提供行数/页数与读取指引。
 - iWork、压缩包等暂不转换。
-- 附件归属当前对话：文本/文档卡片一定落在你正在看的这个对话框（按 shell
-  的「当前会话」解析，不再依赖插槽渲染顺序）。转换出的页面图片走 Harness
-  原生 drop 管线——当前会话回复中时会暂时拒绝 drop，插件会等它空闲再投喂；
-  若同时开着多个对话，其它**空闲**的对话也可能接住同一合成 drop（Harness
-  层面的行为，插件无法圈定范围），建议附图片时只开一个对话（文本/代码文件
-  不受影响，始终留在当前对话）。
-- 文档卡片的"发送时合并"走 DOM 事件桥接到 React 受控输入框，属于对
-  Harness 未公开 API 的适配；核心包升级后若失效，症状是「卡片内容没进
-  消息」，此时可用卡片条的**发送**按钮兜底（合成 Enter 路径），图片路径
-  始终不受影响。
+- 附件归属当前对话：dsh ≥ v0.1.1 经官方注入面精确寻址当前会话，卡片与图片
+  一定落在你正在看的这个对话框；旧版宿主的合成 drop 兜底路径仍可能被其它
+  **空闲**对话接住，建议该场景下附图片时只开一个对话（文本/代码文件不受影响，
+  始终留在当前对话）。
+- DOM 事件桥已降级为旧版宿主（无官方输入面）的回退；若其失效，症状仅出现在
+  旧版宿主上的「卡片内容没进消息」，此时可用卡片条的**发送**按钮兜底
+  （官方 submit 或合成 Enter 路径），图片路径始终不受影响。
 
 ## 发布版本
 
+- **[v0.9.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.9.0)**
+  （最新）—— 对齐 dsh 哲学：转换缓存默认迁 `$DSH_HOME/storages/attachment-docs/<workspaceHash>/`
+  （工作区模式改为 opt-in；旧 `cwd/.dsh-attachments` 每工作区自动一次性迁移）；
+  DeepSeek Vision 探测到 Key 即进入 `auto` OCR 链（可关，首次转录明示按 token 计费）；
+  凭据优先走官方 `ctx.credentials` seam（文件解析仅回退）；设置增加 revision 乐观锁
+  （`expectedRevision`，冲突 409）与缓存位置选择器；smoke 套件全面隔离 `DSH_HOME`。
+- **[v0.8.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.8.0)**
+  —— 外部 API 全部进设置页（不再必须 env）：8 家 OCR（百度/阿里云 AppCode/腾讯云 TC3/
+  Azure Document Intelligence/火山/通用 VLM/本地 tesseract.js/关闭）+ 6 家文档解析预设
+  （PaddleOCR/MinerU/Marker/Docling/自定义/关闭），配置持久化 `DSH_HOME`、脱敏回显；
+  **零配置 DeepSeek Vision OCR**（复用宿主 DeepSeek Key，表格转 GFM）；芯片视觉来源徽标；
+  `sharp`/`@napi-rs/canvas` 迁 `optionalDependencies` + 三态探测；`.gitignore` marker 注入
+  + `/api/attach-formats/doctor` 自检。
+- **[v0.7.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.7.0)**
+  —— 适配 dsh v0.1.x 附件管线：图像限额同步规范化时代新默认
+  （20MiB/200MiB/64MP/8192px + 新增 `maxImageDimension`），页面图渲染改以宿主
+  `normalizationPolicy.maxBytes` 预算为目标；转换图片改走官方按会话注入面
+  （`createDraftImages` + `addImages`，v0.1.1+ 不再出现跨对话串扰）；文档卡片
+  改经官方 `setDraft` 写路径合并（命令认领态绝不污染）；附件缓存页迁移到
+  rc.7 规范的 `settings.plugins.tab`；`/attach` 显式声明 `images: false`，
+  `/attach full` 改用 `agent.inject()` 别名；DOM 桥接与合成 drop 保留为旧版
+  宿主回退。
 - **[v0.6.4](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.4)**
-  （最新）—— 会话归属正确与零拷贝校验：附件按 shell 当前会话归属（不再出现
+  —— 会话归属正确与零拷贝校验：附件按 shell 当前会话归属（不再出现
   卡片/图片跑到别的对话框）；转换图片等当前会话空闲再投喂；工作区零拷贝改
   「文件名 + 字节数 + 完整 SHA-256」同源确认（杜绝同名同大小静默替换），
   >16MB 直接拒绝；INDEX 单元格转义、重建按工作区串行化；缓存命中保留
@@ -265,6 +291,30 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 - **[v0.5.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.5.0)**
   —— 文档卡片、索引卡转存、`/attach list|full`、自适应并入上限、
   pymupdf4llm/pdfjs 引擎、tesseract.js OCR。
+
+## 模型体验
+
+提取文本与 OCR 转录仅在用户发送合并消息（文档卡片）或模型用 `read` 读取
+落盘 `doc.md` 时进入模型上下文——插件自身不提交任何内容。视觉 OCR
+（`deepseek-v4-flash-vision-exp` 或已配置的云供应商）由该供应商按 token 计费；
+每批首次转录会在卡片说明中明示。索引卡在默认缓存目录（home）下写绝对路径、
+工作区模式下写相对路径，`read`/`read_image` 两种模式均可解析。
+
+#### KV Cache 效果
+
+转换结果内容寻址、跨发送原样复用（缓存命中除索引卡本身外零新增 token）。
+切换引擎/OCR 供应商会改变转换策略指纹并使旧缓存失效：换供应商后下一次拖入
+重新转录，绝不供应旧文本。
+
+## 已知限制
+
+- DeepSeek Key 的文件回退用极简正则解析 `.credentials.yaml`；宿主凭证格式
+  变化时插件回退本地 tesseract 并告警（官方 `ctx.credentials` seam 优先尝试）。
+- `auto` 视觉需要探测到 DeepSeek Key；无 Key 时静默跳到本地 OCR
+  （显式 `deepseek` 模式会说明原因）。
+- 旧 `.doc/.xls/.ppt` 需要 LibreOffice；`rtf` 需要 pandoc；重型解析器
+  （MinerU/Marker/PaddleOCR）仅作外部服务——绝不捆绑。
+- iWork 与压缩包暂不转换。
 
 ## License
 

@@ -1,7 +1,7 @@
 # dsh-attachment-formats — Attachment Format Expansion (Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.6.4-informational)](#)
+[![version](https://img.shields.io/badge/version-0.9.0-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
@@ -198,11 +198,23 @@ dsh-attachment-formats/
   headroom); spill page images ≤100 pages (1100px wide; PNG over the per-image byte
   budget falls back to JPEG); scanned-page image cap follows the deployment limit; OCR
   ≤20 pages per run (2000px wide), confidence <45 falls back to page images.
-- Document-card content is merged into the React controlled input through a DOM event
-  bridge at send time (same path as the native submit); the image path is fully
-  independent and untouched.
+- Converted page images mount through the harness's **official per-session
+  injection face** (`ctx.conversation.createDraftImages` + `input.addImages`,
+  dsh ≥ v0.1.1) — attachments always land in the conversation you are looking
+  at, never in another idle dialog. On older hosts the plugin falls back to the
+  legacy synthetic drop (which waits for the current conversation to become
+  idle first).
+- Document-card content merges at send time through the official composer
+  write path (`setDraft`, phase-gated: plain drafts only, command claims are
+  never polluted); on older hosts it falls back to a DOM event bridge into the
+  React controlled input (same path as the native submit). The image path is
+  fully independent and untouched.
 - Conversion progress/errors show in a temporary status bar above the composer
   (`conversation.input.dock`); success auto-hides after 6s, errors can be dismissed.
+- Page-image rendering targets the host's normalization byte budget
+  (`normalizationPolicy.maxBytes`) instead of the raw admission bound, so
+  rendered pages are not re-compressed a second time by the dsh ≥ v0.1.1
+  canonical image pipeline.
 
 ## Installation
 
@@ -250,22 +262,48 @@ afterwards).
   carries line/page counts and reading pointers.
 - iWork and archives are not converted yet.
 - Attachments are attributed to the shell's **current conversation** (the one being
-  viewed). Text/document cards therefore land in the dialog you are looking at.
-  Converted page images go through the harness's native drop pipeline: if the current
-  conversation is mid-reply it temporarily refuses drops, so the plugin waits for it
-  to become idle before feeding the images. With several conversations open at once,
-  other *idle* conversations may also accept that same synthetic drop — a harness-level
-  behavior the plugin cannot scope; prefer attaching images with a single conversation
-  open (text/code files are unaffected: they always stay in the current dialog).
-- The "merge on send" for document cards bridges into the React controlled input over
-  DOM events — an adaptation to an unpublished harness API; if a core upgrade breaks it,
-  the symptom is "card content didn't enter the message", and the card's **send** button
-  is the fallback (synthetic Enter path). The image path is never affected.
+  viewed). On dsh ≥ v0.1.1 the official injection face addresses that session
+  exactly; on older hosts the synthetic-drop fallback can be caught by other
+  *idle* conversations — prefer attaching images with a single conversation
+  open there (text/code files are unaffected: they always stay in the current dialog).
+- The DOM event bridge is now only a fallback for hosts without the official
+  input face; if it breaks, the symptom is "card content didn't enter the
+  message" on legacy hosts only, and the card's **send** button is the
+  fallback (synthetic Enter path). The image path is never affected.
 
 ## Releases
 
+- **[v0.9.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.9.0)**
+  (latest) — dsh-philosophy alignment: conversion cache moves to
+  `$DSH_HOME/storages/attachment-docs/<workspaceHash>/` by default (workspace
+  mode now opt-in; legacy `cwd/.dsh-attachments` auto-migrates once per
+  workspace); DeepSeek Vision joins the `auto` OCR chain when a key is
+  detected (toggleable, first transcription notes token billing); credentials
+  resolve through the official `ctx.credentials` seam with file-parse
+  fallback; settings gain revision CAS (`expectedRevision` → 409 on conflict)
+  and a cache-location picker; smoke suites isolate `DSH_HOME`.
+- **[v0.8.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.8.0)**
+  — settings page for all external APIs (no more required env): 8 OCR
+  providers (Baidu / Aliyun AppCode / Tencent TC3 / Azure Document Intelligence
+  / Volc / generic VLM / local tesseract.js / off) + 6 doc-parser presets
+  (PaddleOCR / MinerU / Marker / Docling / custom / off), persisted under
+  `DSH_HOME` with masked readback; zero-config **DeepSeek Vision OCR**
+  (reuses the host's DeepSeek key, tables → GFM); vision provenance badges on
+  chips; `sharp`/`@napi-rs/canvas` moved to `optionalDependencies` with
+  three-state probes; `.gitignore` marker injection + `/api/attach-formats/doctor`.
+- **[v0.7.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.7.0)**
+  — adaptation to dsh v0.1.x attachment pipeline: image limits
+  resynced to the normalization-era defaults (20MiB/200MiB/64MP/8192px per
+  side + `maxImageDimension`), page-image rendering now targets the host's
+  `normalizationPolicy.maxBytes` budget; converted images attach through the
+  official per-session injection face (`createDraftImages` + `addImages`,
+  no more cross-conversation drops on v0.1.1+); document cards merge via the
+  official `setDraft` write path (command claims never polluted); the cache
+  settings page moves to the rc.7-standard `settings.plugins.tab`; `/attach`
+  declares `images: false` and `/attach full` uses the `agent.inject()`
+  alias; DOM bridge and synthetic drop remain as legacy-host fallbacks.
 - **[v0.6.4](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.6.4)**
-  (latest) — session-correct attachments & verified zero-copy: attachments now
+  — session-correct attachments & verified zero-copy: attachments now
   attribute to the shell's current conversation (no more cards/images landing in
   another dialog); converted images wait for the current conversation to become
   idle before the synthetic drop; workspace zero-copy is confirmed by name + size +
@@ -304,6 +342,36 @@ afterwards).
 - **[v0.5.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.5.0)**
   — document cards, index-card spill, `/attach list|full`, adaptive merge limit,
   pymupdf4llm/pdfjs engines, tesseract.js OCR.
+
+## Model experience
+
+Extracted text and OCR transcripts enter the model context only when the user
+sends the merged message (document cards) or reads the spilled `doc.md` via
+the `read` tool — the plugin itself submits nothing. Vision OCR
+(`deepseek-v4-flash-vision-exp` or a configured cloud provider) is billed by
+that provider; the first transcription of a batch notes it in the card notes.
+Index cards carry absolute workspace paths (default cache home) or relative
+ones (workspace mode), so `read`/`read_image` resolve in both modes.
+
+#### KV Cache effect
+
+Conversion results are content-addressed and reused verbatim across sends
+(cache hits add zero new tokens beyond the index card itself). Switching
+engines/OCR providers changes the converter-policy fingerprint and invalidates
+old caches, so a provider swap re-transcribes on the next drop rather than
+serving stale text.
+
+## Known limitations
+
+- The DeepSeek key file fallback parses `.credentials.yaml` with a minimal
+  regex; if the host's credential format changes, the plugin falls back to
+  local tesseract with a warning (the official `ctx.credentials` seam is
+  tried first).
+- `auto` Vision requires a detectable DeepSeek key; without one it silently
+  skips to local OCR (explicit `deepseek` mode reports the reason instead).
+- Legacy `.doc/.xls/.ppt` need LibreOffice; `rtf` needs pandoc; heavy parsers
+  (MinerU/Marker/PaddleOCR) are external services only — never bundled.
+- iWork and archives are not converted.
 
 ## License
 

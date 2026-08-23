@@ -1,0 +1,4 @@
+allowBuilds:
+  tesseract.js: true
+onlyBuiltDependencies:
+  - tesseract.js

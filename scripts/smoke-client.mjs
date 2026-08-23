@@ -166,10 +166,10 @@ try {
 
 const left = registered.filter((r) => r.key === "conversation.input.left");
 const dock = registered.filter((r) => r.key === "conversation.input.dock");
-const settings = registered.filter((r) => r.key === "settings.section");
+const settingsTab = registered.filter((r) => r.key === "settings.plugins.tab");
 check("input.left registered", left.length === 1 && left[0].options.id === "attach-formats");
 check("input.dock registered", dock.length === 1 && dock[0].options.id === "attach-formats");
-check("settings.section registered (cache page)", settings.length === 1 && settings[0].options.id === "attach-cache");
+check("settings.plugins.tab registered (cache page)", settingsTab.length === 1 && settingsTab[0].options.id === "attach-cache");
 
 const drops = documentListeners.filter((l) => l.type === "drop" && l.capture);
 const pastes = documentListeners.filter((l) => l.type === "paste" && l.capture);
@@ -238,6 +238,80 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
   const afterFirst = textarea.value;
   keydowns[0].fn({ key: "Enter", shiftKey: false, target: textarea });
   check("二次 Enter 不重复合并", textarea.value === afterFirst);
+}
+
+// ---- 官方注入面（v0.1.1+ ctx.conversation）：优先于 DOM 桥接 ----------------
+{
+	const setDraftCalls = [];
+	const submitCalls = [];
+	let addedIds = null;
+	const createdBatches = [];
+	const shell = {
+		state: { getSnapshot: () => ({ draft: "", phase: "plain" }) },
+		setDraft: (text) => setDraftCalls.push(text),
+		addImages: (ids) => {
+			addedIds = ids;
+			return true;
+		},
+		submit: () => submitCalls.push(true)
+	};
+	let forArg = null;
+	ctx.conversation = {
+		createDraftImages: (files) => {
+			createdBatches.push(files);
+			return files.map((file, index) => ({ id: `draft-${createdBatches.length}-${index}`, file }));
+		},
+		releaseDraftImages: () => {},
+		input: {
+			for: (arg) => {
+				forArg = arg;
+				return shell;
+			}
+		}
+	};
+	ctx.sessions.scope = (id) => ({ scopeId: id });
+
+	// 图片注入：createDraftImages + addImages 按会话寻址
+	const faces = clientModule.__officialFaces;
+	const attached = faces.attachImagesOfficially([{ name: "p1.png", type: "image/png" }], "s1");
+	check(
+		"官方图片注入：createDraftImages+addImages 被调用",
+		attached === true && createdBatches.length === 1 && Array.isArray(addedIds) && addedIds.length === 1,
+		`attached=${attached}`
+	);
+	check(
+		"官方图片注入：input.for 收到 sessions.scope 的会话作用域",
+		forArg !== null && forArg.scopeId === "s1",
+		`forArg=${JSON.stringify(forArg)}`
+	);
+
+	// 忙/命令认领态拒绝合并（返回 false，卡片保留语义由调用方处理）
+	shell.state.getSnapshot = () => ({ draft: "/cmd", phase: "claimed" });
+	check("官方合并：claimed 相拒绝", faces.mergeDraftBlocksOfficially("x", "s1") === false);
+	shell.state.getSnapshot = () => ({ draft: "", phase: "plain" });
+
+	// 文本芯片经官方 setDraft 合并（textarea 不被写入）
+	const mdOfficial = {
+		name: "官方.md",
+		type: "text/markdown",
+		size: 100,
+		arrayBuffer: async () => new TextEncoder().encode("官方路径正文").buffer
+	};
+	const textareaBefore = queriedTextarea.value;
+	drops[0].fn({
+		dataTransfer: { types: ["Files"], files: [mdOfficial] },
+		preventDefault: () => {},
+		stopImmediatePropagation: () => {}
+	});
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	keydowns[0].fn({ key: "Enter", shiftKey: false, target: queriedTextarea });
+	check(
+		"官方 setDraft 合并：textarea 保持不变（未走 DOM 桥接）",
+		setDraftCalls.length === 1 && String(setDraftCalls[0]).includes("[附件: 官方.md]") && queriedTextarea.value === textareaBefore,
+		`setDraftCalls=${setDraftCalls.length}`
+	);
+	delete ctx.conversation;
+	delete ctx.sessions.scope;
 }
 
 // ---- 组件真实挂载（SSR）：验证产品而非框架 --------------------------------

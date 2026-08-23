@@ -18,6 +18,19 @@ import * as plugin from "../lib/index.js";
 import { disposeOcr, TESSDATA_DIR } from "../lib/convert/ocr.js";
 
 const testCwd = mkdtempSync(join(tmpdir(), "dsh-ocr-test-"));
+// v0.9 隔离：DSH_HOME 指向临时目录（防读真实凭据/写真实目录），
+// 预置 workspace 模式使 INDEX.md 断言继续成立。
+const testHome = mkdtempSync(join(tmpdir(), "dsh-ocr-home-"));
+const previousDshHome = process.env.DSH_HOME;
+process.env.DSH_HOME = testHome;
+{
+  const { mkdirSync, writeFileSync } = await import("node:fs");
+  mkdirSync(join(testHome, "storages"), { recursive: true });
+  writeFileSync(
+    join(testHome, "storages", "attachment-formats-config.json"),
+    JSON.stringify({ revision: 1, cacheLocation: "workspace" })
+  );
+}
 
 let failures = 0;
 let skipped = 0;
@@ -115,7 +128,7 @@ plugin.apply(ctx);
 const previousEngine = process.env.DSH_ATTACH_ENGINE;
 const previousOcr = process.env.DSH_ATTACH_OCR;
 process.env.DSH_ATTACH_ENGINE = "builtin"; // 固定引擎，避免 python 干扰 OCR 用例
-process.env.DSH_ATTACH_OCR = "auto";
+process.env.DSH_ATTACH_OCR = "tesseract-js"; // 显式本地 OCR：隔离真实凭据（DeepSeek Vision auto 探测）
 
 async function callRoute(files, extra = {}) {
   const handler = routes.find((route) => route.path === "/api/attach-formats/convert").handler;
@@ -198,8 +211,11 @@ process.env.DSH_ATTACH_ENGINE = previousEngine ?? undefined;
 process.env.DSH_ATTACH_OCR = previousOcr ?? undefined;
 if (process.env.DSH_ATTACH_ENGINE === undefined) delete process.env.DSH_ATTACH_ENGINE;
 if (process.env.DSH_ATTACH_OCR === undefined) delete process.env.DSH_ATTACH_OCR;
+if (previousDshHome === undefined) delete process.env.DSH_HOME;
+else process.env.DSH_HOME = previousDshHome;
 await disposeOcr(); // 终止常驻 worker，避免测试进程挂起
 rmSync(testCwd, { recursive: true, force: true });
+rmSync(testHome, { recursive: true, force: true });
 
 console.log(`\n${failures === 0 ? "OCR 冒烟全部通过 ✅" : `${failures} 项失败 ❌`}${skipped > 0 ? `（${skipped} 项跳过）` : ""}`);
 if (failures > 0) process.exitCode = 1;

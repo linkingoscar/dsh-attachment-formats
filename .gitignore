@@ -19,3 +19,9 @@ temp/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# >>> dsh-attachment-formats managed (do not edit between markers) >>>
+# Attachment cache produced by dsh-attachment-formats — never commit
+.dsh-attachments/
+**/.dsh-attachments/
+# <<< dsh-attachment-formats managed <<<
