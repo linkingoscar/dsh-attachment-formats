@@ -1,16 +1,30 @@
-# dsh-attachment-formats — Attachment Format Expansion (Codex-style)
+# dsh-attachment-formats — DeepSeek Harness Attachment Expansion (dsh-plugin, Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.10.0-informational)](#)
-[![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
+[![version](https://img.shields.io/badge/version-0.11.0-informational)](#)
+[![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
 
 English | [中文](README.zh.md)
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) web plugin that
+> **DeepSeek Harness plugin (`dsh-plugin`) for the Web GUI** — `dsh plugin add` one-liner. Makes the composer accept PDF, Office (docx/xlsx/pptx), TIFF, epub/odt/rtf, long-document text and scanned-PDF OCR, Codex-style. Keywords: `dsh`, `deepseek-harness`, `cordis`, `pdf-extraction`, `tesseract`, `deepseek-vision`, `files-api`.
+
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) web plugin (`dsh-plugin`, Cordis) that
 makes the composer accept many more attachment formats, Codex-style. Zero core-package
 changes: a pure plugin that reuses the harness-native image draft rail, upload limits,
 history rendering and model request pipeline.
+
+```powershell
+# one-liner (GitHub)
+dsh plugin --profile web add github:linkingoscar/dsh-attachment-formats
+# alias (npm, when published)
+dsh plugin --profile web add dsh-attachment-formats
+```
+
+![dsh-attachment-formats — paperclip, document chips and index card (Playwright mock, dsh 0.1.1-rc.2)](assets/demo.png)
+
+> Paperclip button · drag & drop / paste · official per-session injection · index-card never silently truncated — captured via Playwright against a local mock of the composer.
 
 ## Supported formats
 
@@ -216,12 +230,22 @@ dsh-attachment-formats/
   rendered pages are not re-compressed a second time by the dsh ≥ v0.1.1
   canonical image pipeline.
 
-## Installation
+## Quick install (dsh plugin)
 
-From GitHub (recommended):
+> Search: `dsh attachment` · `dsh pdf` · `dsh office` · `dsh ocr` · `cordis pdf plugin` — this plugin answers those queries.
+
+From GitHub (recommended, `dsh-plugin` topic for discoverability):
 
 ```powershell
 dsh plugin --profile web add github:linkingoscar/dsh-attachment-formats
+```
+
+From npm (when published, enables `keywords:dsh-plugin` search):
+
+```powershell
+dsh plugin --profile web add dsh-attachment-formats
+# or
+npm install dsh-attachment-formats
 ```
 
 Local development:
@@ -368,6 +392,24 @@ Conversion results are content-addressed and reused verbatim across sends
 engines/OCR providers changes the converter-policy fingerprint and invalidates
 old caches, so a provider swap re-transcribes on the next drop rather than
 serving stale text.
+
+## FAQ — search-friendly
+
+**Q: How to add PDF support to DeepSeek Harness Web?** `dsh plugin --profile web add github:linkingoscar/dsh-attachment-formats` — PDFs extract text-layer (pymupdf4llm/pdfjs), scanned PDFs OCR via tesseract/DeepSeek Vision, long docs spill to index cards.
+
+**Q: Does it work with Office (docx/xlsx/pptx) and TIFF/epub?** Yes — docx tables → Markdown pipes, xlsx → TSV, pptx → per-slide text, TIFF → PNG, epub/odt → Markdown via pandoc/jszip.
+
+**Q: What about dsh file-upload vs drag-and-drop?** This plugin is an alternative to `dsh-drag-and-drop`/`dsh-at-file`/`dsh-file-uploads`: it converts content (not just paths) so text-models can read PDFs; zero-copy via SHA-256 for workspace files keeps uploads low.
+
+**Q: Which OCR backends?** `auto` tries Baidu (1k free/mo) → VLM → Aliyun/Tencent/Azure/Volc → DeepSeek Vision (reuses host key) → tesseract.js; all optional, no heavy deps.
+
+**Q: Where are docs cached?** `DSH_HOME/storages/attachment-docs/<wsHash>/` (default), opt-in workspace mode `.dsh-attachments/`, 7-day TTL, `INDEX.md` + `read`/`read_image`.
+
+## Related / discovery
+
+- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repo for discoverability (per [deepseek-harness README](https://github.com/deepseek-ai/deepseek-harness#community-and-support)).
+- Curated lists: [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin), [dshplugin.world](https://dshplugin.world), [deepseekharness.io/plugins](https://deepseekharness.io/plugins), [dsh.pub](https://dsh.pub) — PRs welcome; this plugin declares `dsh.bundle` so it qualifies for manifest-verified discovery.
+- Keywords: `dsh`, `dsh-plugin`, `deepseek-harness`, `cordis`, `pdf-extraction`, `office`, `tiff`, `ocr`, `tesseract`, `deepseek-vision`.
 
 ## Known limitations
 

@@ -1,13 +1,24 @@
-# dsh-attachment-formats — 附件格式扩展（Codex 风格兼容）
+# dsh-attachment-formats — DeepSeek Harness 附件扩展（dsh-plugin，Codex 风格）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.10.0-informational)](#)
-[![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](#)
+[![version](https://img.shields.io/badge/version-0.11.0-informational)](#)
+[![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
+
+> **DeepSeek Harness 插件（`dsh-plugin`）· Web GUI 一键安装 `dsh plugin add`。** 让输入框支持 PDF、Office（docx/xlsx/pptx）、TIFF、epub/odt/rtf、长文档与扫描件 OCR（tesseract/百度/DeepSeek Vision 等 8 家），Codex 式。检索词：`dsh` `deepseek-harness` `cordis` `pdf` `office` `ocr` `tesseract`。
 
 让 DeepSeek Harness Web 的输入框像 Codex 一样接收更多文件格式。不改动任何
 核心包：纯插件实现，沿用 Harness 原生的图片草稿栏、上传限额校验、历史渲染
 与模型请求管道。
+
+```powershell
+dsh plugin --profile web add github:linkingoscar/dsh-attachment-formats
+```
+
+![dsh-attachment-formats — 回形针·文档芯片·索引卡（Playwright 本地 mock，dsh 0.1.1-rc.2）](assets/demo.png)
+
+> 回形针按钮 · 拖放/粘贴 · 官方按会话注入 · 索引卡永不静默截断——Playwright 对本地 composer 模拟页截取。
 
 [English](README.md) | 中文
 
@@ -312,6 +323,23 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 转换结果内容寻址、跨发送原样复用（缓存命中除索引卡本身外零新增 token）。
 切换引擎/OCR 供应商会改变转换策略指纹并使旧缓存失效：换供应商后下一次拖入
 重新转录，绝不供应旧文本。
+
+## 常见问题（检索友好）
+
+**问：如何在 DeepSeek Harness Web 中支持 PDF？** `dsh plugin --profile web add github:linkingoscar/dsh-attachment-formats` 即可，PDF 文字层经 pymupdf4llm/pdfjs 提取，扫描件走 OCR，长文档落盘索引卡。
+
+**问：Office/TIFF/epub 支持吗？** 支持，docx 表格→Markdown 管道表，xlsx/pptx/tiff/epub 同理。
+
+**问：和 dsh-at-file / dsh-file-uploads 区别？** 本插件做内容转换（文本模型可读），而 file-upload/at-file 仅传路径；本插件对工作区文件做 SHA-256 零拷贝，不走重复上传。
+
+**问：OCR 有哪些？** `auto` 依次尝试 百度（免费 1k/月）→ VLM → 阿里/腾讯/Azure/火山 → DeepSeek Vision → tesseract.js。
+
+**问：缓存位置？** 默认 `DSH_HOME/storages/attachment-docs/<wsHash>/`，可选工作区 `.dsh-attachments/`，7 天 TTL。
+
+## 相关收录
+
+- 按 DeepSeek 官方建议为仓库打上 [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic 以被检索。
+- 精选目录：[awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)、[dshplugin.world](https://dshplugin.world)、[deepseekharness.io/plugins](https://deepseekharness.io/plugins)、[dsh.pub](https://dsh.pub)——本插件声明 `dsh.bundle`，符合 manifest-verified 收录条件。
 
 ## 已知限制
 

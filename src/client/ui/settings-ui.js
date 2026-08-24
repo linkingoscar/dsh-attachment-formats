@@ -1,6 +1,19 @@
 // 设置页：附件缓存管理 + 外部服务（OCR/文档解析供应商）配置。
 import { useState, useEffect, useCallback, useRef, jsx, jsxs, Fragment } from "../runtime.js";
-import { currentCwd, activeSession } from "../session-state.js";
+import { currentCwd, activeSession, activeCtx } from "../session-state.js";
+
+const SETTINGS_NS = "attachment-formats";
+function officialScope() {
+	try {
+		const ctx = activeCtx;
+		if (!ctx) return null;
+		const svc = ctx.settingsScope ?? ctx.get?.("settingsScope") ?? ctx.get?.("settings");
+		if (!svc || typeof svc.bind !== "function") return null;
+		return svc.bind({ namespace: SETTINGS_NS });
+	} catch {
+		return null;
+	}
+}
 
 // ---- cache + supplier settings page（设置页：缓存 + 外部 API 供应商）----
 function CacheSettings() {
@@ -29,6 +42,21 @@ function CacheSettings() {
 		}
 	}, []);
 	const refreshCfg = useCallback(async () => {
+		// 优先官方缝 ctx.settingsScope（rc.7+ 可暴露），失败回退自建 /api/attach-formats/settings
+		const scope = officialScope();
+		if (scope) {
+			try {
+				const snap = typeof scope.getSnapshot === "function" ? scope.getSnapshot() : scope;
+				// status 为 unavailable 时说明未暴露，回退
+				if (snap && snap.status === "unavailable") throw new Error("not-exposed");
+				const value = snap?.value ?? snap?.user ?? snap;
+				if (value && typeof value === "object" && (value.engine !== undefined || value.ocr !== undefined)) {
+					setCfg(value);
+					cfgRevisionRef.current = typeof snap.revision === "number" ? snap.revision : 0;
+					return;
+				}
+			} catch {}
+		}
 		try {
 			const cwd = currentCwd();
 			const sessionId = activeSession?.sessionId;
@@ -67,6 +95,37 @@ function CacheSettings() {
 	const saveCfg = useCallback(async (patch) => {
 		setCfgSaving(true);
 		setCfgError(null);
+		// 优先官方缝
+		const scope = officialScope();
+		if (scope) {
+			try {
+				// 尝试按官方 scope 写入（字段级 set 或批量 mutate/update）
+				if (typeof scope.update === "function") {
+					await scope.update(patch, cfgRevisionRef.current);
+				} else if (typeof scope.mutate === "function") {
+					const ops = [];
+					for (const [k, v] of Object.entries(patch)) ops.push({ op: "replace", path: k, value: v });
+					await scope.mutate(ops, cfgRevisionRef.current);
+				} else if (typeof scope.set === "function") {
+					for (const [k, v] of Object.entries(patch)) {
+						if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+							for (const [sk, sv] of Object.entries(v)) await scope.set(`${k}.${sk}`, sv);
+						} else await scope.set(k, v);
+					}
+				} else throw new Error("no official write");
+				const snap = typeof scope.getSnapshot === "function" ? scope.getSnapshot() : null;
+				if (snap?.value) setCfg(snap.value);
+				else setCfg((c) => ({ ...c, ...patch }));
+				cfgRevisionRef.current = typeof snap?.revision === "number" ? snap.revision : cfgRevisionRef.current + 1;
+				return;
+			} catch (e) {
+				const msg = String(e?.message ?? e);
+				// 暴露失败等回退自建 route
+				if (!/not-exposed|unavailable/i.test(msg)) {
+					// 非暴露问题也回退，避免卡死
+				}
+			}
+		}
 		try {
 			const cwd = currentCwd();
 			const sessionId = activeSession?.sessionId;

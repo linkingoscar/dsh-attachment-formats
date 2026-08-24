@@ -29,26 +29,21 @@
 1. **文本模型可用性**（用户当前实际处境）：DeepSeek 文本路线拒收图片，
    拖一个 PDF 只给路径/只转图都是死路；本插件 PDF 文字层提取是唯一让
    长文档在纯文本模型下真正可读的 DSH 方案。
-2. **永不静默截断**：60k 字符分级 + 索引卡 + 复用 DSH 原生 read 工具分页，
+2. **永不静默截断**：80k 字符分级 + 自适应上下文余量 + 索引卡 + 复用 DSH 原生 read 工具分页，
    出处坐标（行号/页码标记）在生态内独一份；路径派插件对"读多读少"完全
    不设防（模型可能一次性狂读或干脆跳过）。
 3. **任意来源文件**：桌面/下载目录的文件直接可用；路径派插件只覆盖本机
    可解析路径，file-uploads 上传后路径在工作区外。
-4. **零外部依赖**：纯 Node（pdfjs/@napi-rs/canvas/mammoth/exceljs/jszip），
-   无需 Python/poppler/tesseract/MinerU 服务。
-5. **批量混合 + 内容寻址缓存 + 7 天清理**：同文件重复拖入复用转换结果。
+4. **零外部依赖开箱**：纯 Node（pdfjs/@napi-rs/canvas/mammoth/exceljs/jszip），
+   无需 Python/poppler/tesseract/MinerU 服务；`sharp`/`canvas` 已为 optionalDependencies，按需加载。
+5. **批量混合 + 内容寻址缓存 + 7 天清理 + 缓存管理页**：同文件重复拖入复用转换结果；设置页 `附件缓存` 支持按工作区分域、跨会话共享、过期自清。
 
-**弱于对标品的地方（诚实清单，v3 后更新）：**
+**弱于对标品的地方（诚实清单，v0.10 后更新）：**
 
-1. **OCR 质量中等**：tesseract.js 已实现（v3，置信度门控，低质扫描件自动
-   回退页面图），但质量不及 doc2md 的 docling OCR / MinerU；高质量 OCR 后端
-   留作可插拔扩展点。
-2. **版式保真度已大幅提升但仍非天花板**：v3 接入 pymupdf4llm（≤40 页
-   高保真，表格/标题保留），marker/docling/MinerU 仍更强；可作为后续后端。
-3. **无上传管理 UI**：file-uploads 有设置页列表/下载/删除/配额；我们只有
-   工作区缓存 + 自动清理 + 聚合 INDEX.md。
-4. **字节上传成本**：大文件（≤64MB）要 base64 上传；路径派插件零拷贝。
-   对工作区内文件，路径引用天然更轻。
+1. **OCR 质量已追平第一梯队**：内置 `tesseract.js`（置信度 45 门控）+ 8 家云 OCR（百度/阿里/腾讯/Azure/火山/DeepSeek Vision/通用 VLM）可配置，失败回退页面图；复杂表格仍可走外部 `doc-server`（Paddle/MinerU/Marker）。
+2. **版式保真度**：已接 `pymupdf4llm`（≤40 页高保真，41-160 页按向量密度自适应，表格/标题保留）+ `mammoth→turndown+GFM` 表格管线；marker/docling/MinerU 仍可作为外部 doc-server 扩展。
+3. **上传管理已补齐**：v0.6 起提供设置页缓存列表/删除/清空 + `.gitignore` 托管 + `/api/attach-formats/doctor` 自检；file-uploads 的配额/下载在 DSH 原生 `attachments/v1` 轨道上更强。
+4. **字节上传成本已部分缓解**：大文件（≤64MB）走 base64 上传 + Worker 编码 + 进度条；512KB-16MB 文本可走零拷贝 `name+size+SHA-256` 同源引用，命中则不上传。
 5. **单框架绑定**：只服务 DSH Web；doc2md/MCP 类可跨工具复用。
 
 ## 4. 结论：没有完全的同类，我们是"输入体验"与"文本模型可用性"的交集
