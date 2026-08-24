@@ -40,6 +40,7 @@ function injectStyles() {
 		".dshaf-settings-btn:hover{border-color:var(--dsw-alias-border-l2,rgba(127,140,160,.65))}",
 		".dshaf-settings-btn:disabled{opacity:.5;cursor:default}",
 		".dshaf-settings-error{color:var(--dsw-alias-state-error-primary,#ff6b6b);font-size:12px;line-height:18px}",
+".dshaf-settings-note{color:var(--dsw-alias-state-success-primary,#3fb950);font-size:12px;line-height:18px}",
 		".dshaf-settings-empty{color:var(--dsw-alias-label-secondary,#aab0bd);font-size:13px;line-height:20px;border:1px dashed var(--dsw-alias-border-l1,rgba(127,140,160,.4));border-radius:10px;padding:16px}",
 		".dshaf-settings-list{flex-direction:column;gap:8px;display:flex}",
 		".dshaf-settings-row{border:1px solid var(--dsw-alias-border-l1,rgba(127,140,160,.4));background:color-mix(in srgb, var(--dsw-specific-input-major,#1f2430) 90%, var(--dsw-alias-label-primary,#e6e8ee));border-radius:10px;justify-content:space-between;align-items:center;gap:12px;padding:8px 12px;display:flex}",

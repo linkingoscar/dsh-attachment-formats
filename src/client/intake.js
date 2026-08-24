@@ -33,7 +33,9 @@ function injectTexts(notes) {
 		.join("");
 	const current = el.value;
 	const next = current.trim() === "" ? blocks.replace(/^\n+/, "") : current + blocks;
-	const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+	const descriptor = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value");
+	const setter = descriptor?.set;
+	if (typeof setter !== "function") return false; // 描述符缺失：桥接失败，卡片保留
 	setter.call(el, next);
 	// 合并自检：DOM 值未生效说明桥接失败——绝不静默丢内容
 	if (el.value !== next) return false;

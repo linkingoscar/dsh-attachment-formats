@@ -12,6 +12,8 @@ function composerReady() {
 }
 
 // 官方注入面上下文（apply 经 setActiveCtx 注入；official-face 只读）。
+// 宿主 ctx 形状远超本插件所需，any 是诚实的边界声明。
+/** @type {any} */
 export let activeCtx = null;
 export function setActiveCtx(ctx) {
   activeCtx = ctx;
@@ -21,6 +23,11 @@ function currentSessionId() {
 	return shellCurrentSessionId() ?? activeSession.sessionId;
 }
 
+/**
+ * 会话状态单例：sessionsService 由 apply 注入（客户端 runtime 的 ISessions，
+ * 形状远超本插件所需，any 边界声明）；sessionId/cwd 由插槽 inject 回写。
+ * @type {{ sessionId: string | undefined, cwd: string | undefined, sessionsService: any }}
+ */
 let activeSession = { sessionId: undefined, cwd: undefined, sessionsService: undefined };
 function shellCurrentSessionId() {
 	const { sessionsService } = activeSession;
@@ -70,7 +77,7 @@ function currentSessionPhase(sessionId) {
 }
 /** 等当前会话空闲再投喂图片（忙时原生管线会拒绝合成 drop，图片会流到其它空闲会话）。 */
 function waitForSessionIdle(sessionId, timeoutMs = 15_000) {
-	return new Promise((resolve) => {
+	return new Promise((/** @type {(value: void) => void} */ resolve) => {
 		const busy = (phase) => phase === "adjudicating" || phase === "submitting";
 		if (!busy(currentSessionPhase(sessionId))) {
 			resolve();

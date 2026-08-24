@@ -8,6 +8,7 @@ function CacheSettings() {
 	const [cfg, setCfg] = useState(null);
 	const [cfgSaving, setCfgSaving] = useState(false);
 	const [cfgError, setCfgError] = useState(null);
+	const [cfgNote, setCfgNote] = useState(null);
 	const cfgRevisionRef = useRef(0);
 	const refresh = useCallback(async () => {
 		setState((current) => ({ ...current, loading: true, error: null }));
@@ -78,6 +79,11 @@ function CacheSettings() {
 			if (p?.ok !== true) throw new Error(p?.error?.message ?? "保存失败");
 			setCfg(p.config);
 			cfgRevisionRef.current = typeof p.revision === "number" ? p.revision : cfgRevisionRef.current + 1;
+			const moved = typeof p.secretsMoved === "number" ? p.secretsMoved : 0;
+			if (moved > 0) {
+				setCfgNote(`已把 ${moved} 个密钥移入 dsh 凭据库（配置文件仅保留引用，删除后可重新填写）`);
+				setTimeout(() => setCfgNote(null), 6000);
+			}
 		} catch (e) {
 			setCfgError(e instanceof Error ? e.message : String(e));
 			void refreshCfg(); // 冲突/失败后拉取最新，避免本地 revision 卡死
@@ -401,7 +407,8 @@ function CacheSettings() {
 										jsx("button", { type: "button", className: "dshaf-settings-btn", disabled: cfgSaving, onClick: () => void saveCfg({ docServer: cfg.docServer }), children: cfgSaving ? "保存中…" : "保存解析服务" })
 									]
 								}, "doc") : null,
-								cfgError ? jsx("div", { className: "dshaf-settings-error", children: cfgError }) : null
+								cfgError ? jsx("div", { className: "dshaf-settings-error", children: cfgError }) : null,
+							cfgNote ? jsx("div", { className: "dshaf-settings-note", children: cfgNote }) : null
 							]
 						})
 				]
