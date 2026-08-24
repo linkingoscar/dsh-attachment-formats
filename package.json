@@ -32,6 +32,7 @@
     "prepublishOnly": "npm run build:client",
     "pretest": "npm run build:client",
     "verify:build": "tsdown && git diff --exit-code -- lib/client.js && echo \"lib/client.js 与源码同步 ✓\"",
+    "typecheck": "tsc --noEmit",
     "smoke": "node scripts/smoke-host.mjs",
     "smoke:route": "node scripts/smoke-route.mjs",
     "smoke:client": "node scripts/smoke-client.mjs",
@@ -62,7 +63,8 @@
     "globals": "^16.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "tsdown": "^0.22.14"
+    "tsdown": "^0.22.14",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

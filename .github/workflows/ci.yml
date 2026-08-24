@@ -13,10 +13,17 @@ jobs:
         node-version: ["20", "22"]
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run smoke:all
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+      - run: pnpm run build:client
+      # 产物新鲜度门禁：构建后 lib/client.js 必须与提交一致（防"改 src 忘 build"）
+      - run: pnpm run verify:build
+      - run: pnpm run smoke:all

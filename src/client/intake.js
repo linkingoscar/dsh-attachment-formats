@@ -244,7 +244,7 @@ async function intake(files, explicitSessionId) {
 					setBus({
 						phase: "working",
 						label: file.name,
-						detail: kind === "pdf" ? "正在提取文字层…" : kind === "tiff" ? "正在转换为图片…" : "正在提取文本…"
+						detail: kind === "pdf" ? "正在提取文字层…" : "正在提取文本…"
 					});
 					// PDF 走主机 job 通道：轮询页级进度（渲染/OCR 页号）；其余仅上传进度
 					const jobId = kind === "pdf" ? `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : undefined;
