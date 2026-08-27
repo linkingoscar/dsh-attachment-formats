@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness 附件扩展（dsh-plugin，Codex 风格）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.11.0-informational)](#)
+[![version](https://img.shields.io/badge/version-0.11.1-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -184,6 +184,8 @@ projects/dsh-attachment-formats/
 
 - 主机路由重新嗅探魔数，不信任客户端声明的 kind；请求体 160MB 上限、单文件
   64MB 上限；`cwd` 由客户端从会话状态读取后随请求上报（决定缓存落盘位置）。
+- dsh v0.1.2+ 下所有插件精确路由复用宿主 connection 的 launch-token 与
+  Host/Origin 校验；v0.1.1 继续沿用旧版 localhost 信任边界。
 - 分级阈值：全文卡片并入上限 8 万字符（v2b 按上下文余量自适应压低）；缓存
   页图 ≤100 页（1100px 宽，PNG 超单图字节预算回退 JPEG）；扫描件页图上限
   沿用部署限额；OCR 单次 ≤20 页（2000px 宽），置信度 <45 回退页面图。
@@ -191,8 +193,9 @@ projects/dsh-attachment-formats/
   （dsh ≥ v0.1.1 的 `ctx.conversation.createDraftImages` + `input.addImages`，
   精确寻址当前会话，杜绝多会话串扰）；旧版宿主回退合成 drop（先等当前会话
   空闲）。文档卡片在发送瞬间经官方 `setDraft` 写路径并入草稿（phase 门控：
-  仅 plain 相合并，命令认领态绝不污染）；旧版宿主回退 DOM 事件桥（与原生提交
-  同路径）。图片路径完全独立、不受影响。
+  仅 plain 相合并，命令认领态绝不污染）；输入框定位同时支持 v0.1.1 textarea
+  与 v0.1.2 Lexical `contenteditable`，旧 textarea DOM 事件桥保留为回退。
+  图片路径完全独立、不受影响。
 - 页面图渲染以宿主规范化字节预算（`normalizationPolicy.maxBytes`）为目标，
   不再误用源准入上限，避免渲染产物被 dsh ≥ v0.1.1 规范化管线二次压缩。
 - 转换进度/错误显示在输入框上方的临时状态条（`conversation.input.dock`），
@@ -247,6 +250,9 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
   （官方 submit 或合成 Enter 路径），图片路径始终不受影响。
 
 ## 发布版本
+
+- **v0.11.1** —— 适配 dsh v0.1.2-alpha.1：支持 Lexical 输入框定位，插件路由
+  复用宿主 launch-token 与 Host/Origin 校验；继续兼容 v0.1.1。
 
 - **[v0.10.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.10.0)**
   （最新）—— 对标 Codex 体验 + 加固：分块上传进度（XHR）与宿主 job 通道

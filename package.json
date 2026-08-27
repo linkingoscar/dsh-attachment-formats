@@ -1,6 +1,6 @@
 {
   "name": "dsh-attachment-formats",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "DeepSeek Harness (dsh) web plugin — Codex-style attachment expansion: PDF text-layer (pymupdf4llm/pdfjs), Office (docx/xlsx/pptx) to Markdown, TIFF/epub/odt/rtf, long-document spill to index cards, scanned-PDF OCR (tesseract.js + 8 cloud providers inc. DeepSeek Vision), and browser image to PNG. dsh-plugin for the DeepSeek Harness Web GUI.",
   "type": "module",
   "main": "lib/index.js",

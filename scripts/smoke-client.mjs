@@ -29,11 +29,12 @@ function check(label, ok, extra = "") {
 const documentListeners = [];
 const HTMLTextAreaElementStub = function HTMLTextAreaElement() {};
 let queriedTextarea = null; // 可切换的假输入框
+let queriedComposerInput = null;
 const documentStub = {
   getElementById: () => null,
   createElement: (tag) => ({ tagName: tag, textContent: "", dataset: {} }),
   head: { appendChild: () => {} },
-  querySelector: () => queriedTextarea,
+  querySelector: (selector) => selector.endsWith("textarea") ? queriedTextarea : queriedComposerInput,
   addEventListener: (type, fn, capture) => documentListeners.push({ type, capture: !!capture, fn }),
   removeEventListener: () => {},
   dispatchEvent: () => true
@@ -310,6 +311,30 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
 		setDraftCalls.length === 1 && String(setDraftCalls[0]).includes("[附件: 官方.md]") && queriedTextarea.value === textareaBefore,
 		`setDraftCalls=${setDraftCalls.length}`
 	);
+
+	// v0.1.2-alpha.1：Lexical contenteditable 可接收附件，Enter 子节点事件仍触发官方合并。
+	queriedTextarea = null;
+	const lexical = {
+		isContentEditable: true,
+		getAttribute: (name) => name === "contenteditable" ? "true" : null
+	};
+	queriedComposerInput = lexical;
+	const lexicalChild = { closest: (selector) => selector === "[data-composer-input]" ? lexical : null };
+	drops[0].fn({
+		dataTransfer: { types: ["Files"], files: [{
+			name: "Lexical.md", type: "text/markdown", size: 100,
+			arrayBuffer: async () => new TextEncoder().encode("Lexical 路径正文").buffer
+		}] },
+		preventDefault: () => {},
+		stopImmediatePropagation: () => {}
+	});
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	keydowns[0].fn({ key: "Enter", shiftKey: false, target: lexicalChild });
+	check(
+		"v0.1.2 Lexical 输入框：附件接收并经官方 setDraft 合并",
+		setDraftCalls.length === 2 && String(setDraftCalls[1]).includes("[附件: Lexical.md]")
+	);
+	queriedComposerInput = null;
 	delete ctx.conversation;
 	delete ctx.sessions.scope;
 }

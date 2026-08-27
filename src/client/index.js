@@ -4,7 +4,7 @@
 // 3. 转换图片经官方注入面按会话挂入草稿栏；4. 卡片发送时经官方 setDraft 合并；
 // 5. settings.plugins.tab 缓存与供应商配置页。
 import { initRuntime } from "./runtime.js";
-import { activeSession, setActiveCtx, composerTextarea } from "./session-state.js";
+import { activeSession, setActiveCtx, isComposerInputTarget } from "./session-state.js";
 import { injectStyles } from "./ui/styles.js";
 import { classifyFile } from "./contract.js";
 import { intake, injectTexts, mergeChipsIntoDraft } from "./intake.js";
@@ -60,7 +60,7 @@ window.__ModuleLoader__.load({
 				// 发送瞬间把文档卡片并入草稿（Enter 提交 / 主按钮点击），随后由原生提交发送
 				const onKeyDownCapture = (event) => {
 					if (event.key !== "Enter" || event.shiftKey) return;
-					if (event.target !== composerTextarea()) return;
+					if (!isComposerInputTarget(event.target)) return;
 					mergeChipsIntoDraft();
 				};
 				const onClickCapture = (event) => {
@@ -122,4 +122,3 @@ window.__ModuleLoader__.load({
 		return module.exports;
 	}
 });
-

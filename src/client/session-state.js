@@ -5,10 +5,29 @@ function composerTextarea() {
 	const el = document.querySelector("[data-composer-card] textarea");
 	return el instanceof HTMLTextAreaElement ? el : null;
 }
+/**
+ * v0.1.1 使用 textarea；v0.1.2-alpha.1 起编辑器改为 Lexical contenteditable。
+ * 这里只做定位/可用性判断，草稿写入仍优先走官方 conversation.input surface。
+ */
+/** @returns {HTMLTextAreaElement|HTMLElement|null} */
+function composerInput() {
+	return composerTextarea() ?? /** @type {HTMLElement|null} */ (
+		document.querySelector("[data-composer-card] [data-composer-input]")
+	);
+}
 function composerReady() {
-	const el = composerTextarea();
+	const el = /** @type {HTMLTextAreaElement|HTMLElement|null} */ (composerInput());
 	if (el === null) return false;
-	return !el.disabled && !el.readOnly;
+	if (el instanceof HTMLTextAreaElement) return !el.disabled && !el.readOnly;
+	return el.getAttribute?.("aria-disabled") !== "true"
+		&& (el.isContentEditable === true || el.getAttribute?.("contenteditable") === "true");
+}
+function isComposerInputTarget(target) {
+	if (target === null || target === undefined) return false;
+	const input = composerInput();
+	if (input === null) return false;
+	if (target === input) return true;
+	return typeof target.closest === "function" && target.closest("[data-composer-input]") === input;
 }
 
 // 官方注入面上下文（apply 经 setActiveCtx 注入；official-face 只读）。
@@ -122,4 +141,4 @@ function currentDirectLimit() {
 }
 
 
-export { composerTextarea, composerReady, activeSession, currentSessionId, shellCurrentSessionId, resolveSessionId, currentCwd, currentSessionPhase, waitForSessionIdle, currentDirectLimit };
+export { composerTextarea, composerInput, composerReady, isComposerInputTarget, activeSession, currentSessionId, shellCurrentSessionId, resolveSessionId, currentCwd, currentSessionPhase, waitForSessionIdle, currentDirectLimit };

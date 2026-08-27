@@ -222,6 +222,14 @@ const ctx = {
 };
 
 check("plugin exports name/inject/apply", plugin.name === "dsh-attachment-formats" && Array.isArray(plugin.inject) && typeof plugin.apply === "function");
+{
+  let status = null;
+  let body = "";
+  const res = { writeHead(value) { status = value; }, end(value) { body = String(value); } };
+  const rejected = plugin.rejectUnauthorizedRequest({ get: () => ({ requestRejection: () => 403 }) }, {}, res);
+  check("v0.1.2 connection policy protects exact routes", rejected && status === 403 && JSON.parse(body).error.code === "forbidden");
+  check("v0.1.1 without requestRejection remains compatible", plugin.rejectUnauthorizedRequest({ get: () => undefined }, {}, res) === false);
+}
 plugin.apply(ctx);
 check("route registered", routes.some((route) => route.path === "/api/attach-formats/convert" && route.kind === "exact"));
 check("/attach command registered", registeredCommands.length === 1 && registeredCommands[0].name === "attach");

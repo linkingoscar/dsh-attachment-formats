@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness Attachment Expansion (dsh-plugin, Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.11.0-informational)](#)
+[![version](https://img.shields.io/badge/version-0.11.1-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -208,6 +208,8 @@ dsh-attachment-formats/
 - The host route re-sniffs magic bytes and never trusts the client-declared kind; 160MB
   request cap and 64MB per-file cap; `cwd` is read by the client from session state and
   sent with the request (it decides where the spill lands).
+- On dsh v0.1.2+, all exact plugin routes reuse the host connection's launch-token and
+  Host/Origin checks; v0.1.1 keeps its legacy localhost trust boundary.
 - Tiered thresholds: full-text merge cap 80k chars (v2b lowers it adaptively by context
   headroom); spill page images ≤100 pages (1100px wide; PNG over the per-image byte
   budget falls back to JPEG); scanned-page image cap follows the deployment limit; OCR
@@ -220,9 +222,9 @@ dsh-attachment-formats/
   idle first).
 - Document-card content merges at send time through the official composer
   write path (`setDraft`, phase-gated: plain drafts only, command claims are
-  never polluted); on older hosts it falls back to a DOM event bridge into the
-  React controlled input (same path as the native submit). The image path is
-  fully independent and untouched.
+  never polluted). Composer detection supports both the v0.1.1 textarea and the
+  v0.1.2 Lexical `contenteditable`; the textarea DOM bridge remains an older-host
+  fallback. The image path is fully independent and untouched.
 - Conversion progress/errors show in a temporary status bar above the composer
   (`conversation.input.dock`); success auto-hides after 6s, errors can be dismissed.
 - Page-image rendering targets the host's normalization byte budget
@@ -296,6 +298,9 @@ afterwards).
   fallback (synthetic Enter path). The image path is never affected.
 
 ## Releases
+
+- **v0.11.1** — dsh v0.1.2-alpha.1 compatibility: Lexical composer detection and
+  host launch-token/Host/Origin enforcement for plugin routes; v0.1.1 remains supported.
 
 - **[v0.10.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.10.0)**
   (latest) — Codex-parity UX + hardening: chunked upload progress (XHR) and a
