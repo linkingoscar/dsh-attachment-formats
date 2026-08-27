@@ -371,5 +371,14 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
   check("挂载无 React key 警告（列表渲染键完整）", keyWarnings.length === 0, keyWarnings.slice(0, 2).join(" | "));
 }
 
+// ---- 会话级取消围栏：s1 的新任务不能取消 s2 -----------------------------
+{
+  const { nextIntakeSeq, peekIntakeSeq } = await import("../src/client/session-state.js");
+  nextIntakeSeq("isolation-s1");
+  const s2 = nextIntakeSeq("isolation-s2");
+  nextIntakeSeq("isolation-s1");
+  check("附件任务取消序号按会话隔离", peekIntakeSeq("isolation-s2") === s2);
+}
+
 console.log(`\n${failures === 0 ? "客户端冒烟通过 ✅" : `${failures} 项失败 ❌`}`);
 if (failures > 0) process.exitCode = 1;

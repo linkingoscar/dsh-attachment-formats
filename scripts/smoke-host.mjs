@@ -19,6 +19,7 @@ import { docxToText } from "../lib/convert/docx.js";
 import { xlsxToText } from "../lib/convert/xlsx.js";
 import { pptxToText } from "../lib/convert/pptx.js";
 import { sniffKind } from "../lib/convert/util.js";
+import { assertArchiveBudget } from "../lib/convert/archive-budget.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const temp = join(root, "temp");
@@ -32,6 +33,17 @@ function check(label, ok, extra = "") {
     failures += 1;
     console.error(`FAIL  ${label} ${extra}`);
   }
+}
+
+console.log("== 压缩文档安全预算 ==");
+{
+  let rejected = false;
+  try {
+    assertArchiveBudget({ files: { "huge.xml": { name: "huge.xml", dir: false, _data: { uncompressedSize: 65 * 1024 * 1024 } } } }, 1024);
+  } catch (error) {
+    rejected = error?.code === "archive-budget-exceeded";
+  }
+  check("超大解压条目在 entry.async 前拒绝", rejected);
 }
 
 /** 手工构建一个 xref 完全正确的单页 PDF（Helvetica 标准字体）。 */

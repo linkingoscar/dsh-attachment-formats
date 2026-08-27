@@ -354,6 +354,21 @@ function CacheSettings() {
 										jsx("span", { children: "auto 时启用 DeepSeek Vision（检测到 Key 即用，按 token 计费）" })
 									]
 								}, "ds-auto") : null,
+								(cfg.ocr?.provider === "auto") ? jsxs("label", {
+									className: "dshaf-settings-check",
+									children: [
+										jsx("input", {
+											type: "checkbox",
+											checked: cfg.ocr?.crossCloudFallback === true,
+											onChange: (e) => {
+												const v = e.target.checked;
+												setCfg((c) => ({ ...c, ocr: { ...c.ocr, crossCloudFallback: v } }));
+												void saveCfg({ ocr: { crossCloudFallback: v } });
+											}
+										}),
+										jsx("span", { children: "允许失败后转发到另一家云 OCR（默认关闭，避免跨云重复上传）" })
+									]
+								}, "cross-cloud") : null,
 								(cfg.ocr?.provider === "deepseek") ? jsxs("div", {
 									className: "dshaf-settings-subgroup",
 									children: [

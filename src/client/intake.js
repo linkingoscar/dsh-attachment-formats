@@ -130,8 +130,9 @@ function sendChipsNow() {
 }
 
 async function intake(files, explicitSessionId) {
-	const seq = nextIntakeSeq();
 	if (files.length === 0) return;
+	const sessionId = resolveSessionId(explicitSessionId);
+	const seq = nextIntakeSeq(sessionId);
 	if (!composerReady()) {
 		setBus({
 			phase: "error",
@@ -141,7 +142,6 @@ async function intake(files, explicitSessionId) {
 		return;
 	}
 	const cwd = currentCwd();
-	const sessionId = resolveSessionId(explicitSessionId);
 	const directLimit = currentDirectLimit();
 	const images = [];
 	const chips = [];
@@ -331,7 +331,7 @@ async function intake(files, explicitSessionId) {
 			});
 		}
 	}
-	if (seq !== peekIntakeSeq()) return;
+	if (seq !== peekIntakeSeq(sessionId)) return;
 	if (images.length > 0) {
 		const readyLabel = images.length === 1 ? "图片已就绪" : `${images.length} 张图片已就绪`;
 		// 优先官方注入面：按当前会话精确寻址，多会话互不串扰；
@@ -340,13 +340,13 @@ async function intake(files, explicitSessionId) {
 		if (attached === false) {
 			setBus({ phase: "working", label: readyLabel, detail: "等待当前会话空闲后附加…" });
 			await waitForSessionIdle(sessionId);
-			if (seq !== peekIntakeSeq()) return;
+			if (seq !== peekIntakeSeq(sessionId)) return;
 			attached = attachImagesOfficially(images, sessionId);
 		}
 		if (attached === null) {
 			setBus({ phase: "working", label: readyLabel, detail: "等待当前会话空闲后附加…" });
 			await waitForSessionIdle(sessionId);
-			if (seq !== peekIntakeSeq()) return;
+			if (seq !== peekIntakeSeq(sessionId)) return;
 			redispatchDrop(images); // 旧版宿主兜底：交原生管线裁决
 		} else if (attached === false) {
 			failedNames.push("(图片)");

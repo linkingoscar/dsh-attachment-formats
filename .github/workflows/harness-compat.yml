@@ -1,0 +1,20 @@
+name: Harness compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tag: [dsh-v0.1.1-rc.2, dsh-v0.1.2-alpha.1]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: git clone --depth 1 --branch "${{ matrix.tag }}" https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
+      - run: npm run check:harness -- ../deepseek-harness "${{ matrix.tag }}"

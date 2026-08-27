@@ -1,6 +1,6 @@
 {
   "name": "dsh-attachment-formats",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "description": "DeepSeek Harness (dsh) web plugin — Codex-style attachment expansion: PDF text-layer (pymupdf4llm/pdfjs), Office (docx/xlsx/pptx) to Markdown, TIFF/epub/odt/rtf, long-document spill to index cards, scanned-PDF OCR (tesseract.js + 8 cloud providers inc. DeepSeek Vision), and browser image to PNG. dsh-plugin for the DeepSeek Harness Web GUI.",
   "type": "module",
   "main": "lib/index.js",
@@ -47,6 +47,7 @@
     "smoke:ocr": "node scripts/smoke-ocr.mjs",
     "smoke:p0": "node scripts/smoke-p0.mjs",
     "smoke:all": "npm run smoke && npm run smoke:route && npm run smoke:client && npm run smoke:ocr && npm run smoke:p0",
+    "check:harness": "node scripts/check-harness-contract.mjs",
     "lint": "eslint ."
   },
   "engines": {

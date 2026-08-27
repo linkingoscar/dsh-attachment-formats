@@ -73,13 +73,22 @@ function currentCwd() {
 		return undefined;
 	}
 }
-/** 供 intake 取单调序号（ESM 导入方不可直接改写 let）。 */
-let intakeSeq = 0;
-export function nextIntakeSeq() {
-  return ++intakeSeq;
+/** 每个会话独立的 intake 序号；新任务只取消同一会话里的旧任务。 */
+const intakeSeqBySession = new Map();
+export function nextIntakeSeq(sessionId) {
+	const key = sessionId ?? "__unbound__";
+	const next = (intakeSeqBySession.get(key) ?? 0) + 1;
+	intakeSeqBySession.set(key, next);
+	// 会话切换很多时避免单例状态无限增长。
+	while (intakeSeqBySession.size > 32) {
+		const oldest = intakeSeqBySession.keys().next().value;
+		if (oldest === undefined) break;
+		intakeSeqBySession.delete(oldest);
+	}
+	return next;
 }
-export function peekIntakeSeq() {
-  return intakeSeq;
+export function peekIntakeSeq(sessionId) {
+	return intakeSeqBySession.get(sessionId ?? "__unbound__") ?? 0;
 }
 
 /** 当前会话输入 phase（adjudicating/submitting 视为忙——原生 drop 会拒绝）。 */

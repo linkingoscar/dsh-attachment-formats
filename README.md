@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness Attachment Expansion (dsh-plugin, Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.11.1-informational)](#)
+[![version](https://img.shields.io/badge/version-0.12.0-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -124,8 +124,9 @@ and v0.6 roadmap): `docs/upgrade-v6.md`.
 - **Remote VLM OCR** (optional, token-billed): `DSH_ATTACH_VLM_BASE` /
   `DSH_ATTACH_VLM_MODEL` (+ optional `DSH_ATTACH_VLM_KEY`) point at any
   OpenAI-compatible vision endpoint (olmOCR-2, GLM-4V, Qwen-VL…). Pages are
-  transcribed one by one via chat/completions. OCR chain: Baidu → VLM →
-  tesseract.js (or force with `DSH_ATTACH_OCR=vlm`).
+  transcribed one by one via chat/completions. In `auto`, only the first configured
+  cloud provider receives a document; failure falls back to local tesseract.js.
+  Cross-cloud retry is explicit opt-in (`DSH_ATTACH_CROSS_CLOUD_FALLBACK=1`).
 - **Content-adaptive PDF engine**: documents of 41–160 pages now let the Python
   engine decide by vector density (sampled `get_drawings`) — text-heavy manuals
   skip the slow high-fidelity pass and go straight to the fast pdfjs engine, while
@@ -299,6 +300,12 @@ afterwards).
 
 ## Releases
 
+- **v0.12.0** — raw binary uploads replace base64 JSON on the default client path;
+  OOXML/epub/odt ZIP containers gain entry-count, per-entry, total-size and compression-
+  ratio budgets; attachment supersession is isolated per session; credentials move to
+  the host store before ordinary settings are written; automatic OCR no longer forwards
+  one document to multiple cloud providers unless explicitly enabled.
+
 - **v0.11.1** — dsh v0.1.2-alpha.1 compatibility: Lexical composer detection and
   host launch-token/Host/Origin enforcement for plugin routes; v0.1.1 remains supported.
 
@@ -406,7 +413,9 @@ serving stale text.
 
 **Q: What about dsh file-upload vs drag-and-drop?** This plugin is an alternative to `dsh-drag-and-drop`/`dsh-at-file`/`dsh-file-uploads`: it converts content (not just paths) so text-models can read PDFs; zero-copy via SHA-256 for workspace files keeps uploads low.
 
-**Q: Which OCR backends?** `auto` tries Baidu (1k free/mo) → VLM → Aliyun/Tencent/Azure/Volc → DeepSeek Vision (reuses host key) → tesseract.js; all optional, no heavy deps.
+**Q: Which OCR backends?** `auto` selects the first configured cloud backend in the
+Baidu → VLM → Aliyun/Tencent/Azure/Volc → DeepSeek order, then falls back locally;
+cross-cloud retry is opt-in. All backends are optional and no heavyweight model is bundled.
 
 **Q: Where are docs cached?** `DSH_HOME/storages/attachment-docs/<wsHash>/` (default), opt-in workspace mode `.dsh-attachments/`, 7-day TTL, `INDEX.md` + `read`/`read_image`.
 

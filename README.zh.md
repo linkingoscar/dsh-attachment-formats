@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness 附件扩展（dsh-plugin，Codex 风格）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.11.1-informational)](#)
+[![version](https://img.shields.io/badge/version-0.12.0-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -109,7 +109,8 @@ dsh plugin --profile web add github:linkingoscar/dsh-attachment-formats
 - **远程 VLM OCR**（可选，按 token 计费）：`DSH_ATTACH_VLM_BASE` /
   `DSH_ATTACH_VLM_MODEL`（可选 `DSH_ATTACH_VLM_KEY`）指向任意 OpenAI 兼容
   视觉端点（olmOCR-2、GLM-4V、Qwen-VL…），逐页经 chat/completions 转录。
-  OCR 链路：百度 → VLM → tesseract.js（`DSH_ATTACH_OCR=vlm` 可强制）。
+  `auto` 只把文档交给首个已配置的云供应商，失败后回退本地 tesseract.js；
+  跨云重试必须显式开启（`DSH_ATTACH_CROSS_CLOUD_FALLBACK=1`）。
 - **内容自适应 PDF 引擎**：41–160 页的文档由 python 引擎按向量密度（采样
   `get_drawings`）自行决策——纯文字手册跳过耗时的高保真转换直走 pdfjs 快速
   引擎；表格/图形密集文档仍走 pymupdf4llm。≤40 页行为不变。
@@ -251,6 +252,11 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 
 ## 发布版本
 
+- **v0.12.0** —— 客户端默认改为原始二进制上传，移除 base64 JSON 的内存放大；
+  OOXML/epub/odt 增加 ZIP 条目数、单条、总解压大小和压缩比预算；附件任务按
+  会话隔离；密钥先迁入宿主凭据库再写普通设置；自动 OCR 默认不再把同一文档
+  依次发送给多家云服务，跨云重试需显式开启。
+
 - **v0.11.1** —— 适配 dsh v0.1.2-alpha.1：支持 Lexical 输入框定位，插件路由
   复用宿主 launch-token 与 Host/Origin 校验；继续兼容 v0.1.1。
 
@@ -338,7 +344,8 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 
 **问：和 dsh-at-file / dsh-file-uploads 区别？** 本插件做内容转换（文本模型可读），而 file-upload/at-file 仅传路径；本插件对工作区文件做 SHA-256 零拷贝，不走重复上传。
 
-**问：OCR 有哪些？** `auto` 依次尝试 百度（免费 1k/月）→ VLM → 阿里/腾讯/Azure/火山 → DeepSeek Vision → tesseract.js。
+**问：OCR 有哪些？** `auto` 按 百度 → VLM → 阿里/腾讯/Azure/火山 → DeepSeek
+Vision 选择首个已配置云端，失败即回退本地 tesseract.js；跨云重试为显式选项。
 
 **问：缓存位置？** 默认 `DSH_HOME/storages/attachment-docs/<wsHash>/`，可选工作区 `.dsh-attachments/`，7 天 TTL。
 

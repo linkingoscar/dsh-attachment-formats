@@ -193,6 +193,7 @@ const fixtureHugeDocx = await buildHugeDocx();
 // ---- 假 cordis 上下文（不注入 attachments → 走回退限额）------------------
 const routes = [];
 const registeredCommands = [];
+const credentialValues = new Map();
 const sessionsStub = {
   get(sessionId) {
     return sessionId === "test-session" ? { header: { cwd: testCwd } } : undefined;
@@ -216,7 +217,12 @@ const ctx = {
     }
   },
   get(name) {
-    return name === "sessions" ? sessionsStub : undefined;
+    if (name === "sessions") return sessionsStub;
+    if (name === "credentials") return {
+      async set(ref, value) { credentialValues.set(ref, value); },
+      async resolve(ref) { return credentialValues.has(ref) ? { value: credentialValues.get(ref) } : undefined; }
+    };
+    return undefined;
   },
   logger: console
 };
@@ -266,6 +272,19 @@ async function callRoute(files, extra = {}) {
   return { status, body: JSON.parse(response) };
 }
 
+async function callBinaryRoute(bytes, name, kind) {
+  const query = new URLSearchParams({ name, kind, sessionId: "test-session" });
+  const req = Readable.from([bytes]);
+  req.method = "POST";
+  req.url = `/api/attach-formats/convert?${query}`;
+  req.headers = { "content-type": "application/octet-stream" };
+  let status = 0;
+  let response = "";
+  const res = { writeHead(code) { status = code; }, end(chunk) { response = String(chunk); } };
+  await convertHandler(req, res);
+  return { status, body: JSON.parse(response) };
+}
+
 console.log("\n== PDF 文字优先（小 PDF → text）==");
 {
   const { status, body } = await callRoute([
@@ -276,6 +295,13 @@ console.log("\n== PDF 文字优先（小 PDF → text）==");
   check("pdf → text (not images)", result?.kind === "text", `got ${result?.kind}`);
   check("text has page marker", String(result?.text).includes("<!-- p1 -->"));
   check("text has content", String(result?.text).includes("Hello PDF page 1"));
+}
+
+console.log("\n== v0.12 二进制上传（无 base64 放大）==");
+{
+  const { status, body } = await callBinaryRoute(fixturePdf, "二进制报告.pdf", "pdf");
+  check("octet-stream status 200", status === 200, `got ${status}`);
+  check("octet-stream PDF 正常转换", body.results?.[0]?.kind === "text");
 }
 
 console.log("\n== 扫描件 PDF 回退（无文本层 → images）==");
@@ -561,6 +587,15 @@ console.log("\n== v0.10 进度/预览/SSRF/CAS 路由 ==");
   check("settings 正确 revision 保存", w1.status === 200 && w1.body?.revision === s1.body.revision + 1);
   const w2 = await callSettingsPost({ sessionId: "test-session", engine: "python", expectedRevision: s1.body.revision });
   check("settings 旧 revision → 409 settings-conflict", w2.status === 409 && w2.body?.error?.code === "settings-conflict");
+  const secret = "test-secret-never-write";
+  const w3 = await callSettingsPost({
+    sessionId: "test-session",
+    ocr: { deepseek: { key: secret } },
+    expectedRevision: w1.body.revision
+  });
+  check("settings 密钥先迁 credentials", w3.status === 200 && w3.body?.secretsMoved === 1 && credentialValues.get("DSH_ATTACH_DEEPSEEK_KEY") === secret);
+  const storedSettings = readFileSync(join(testHome, "storages", "attachment-formats-config.json"), "utf8");
+  check("settings 文件从未写入迁移后的明文密钥", !storedSettings.includes(secret));
   const { validateDocServerUrl } = await import("../lib/convert/doc-server.js");
   let ssrfThrew = false;
   try { validateDocServerUrl("file:///etc/passwd"); } catch { ssrfThrew = true; }
