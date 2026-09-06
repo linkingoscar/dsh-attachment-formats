@@ -4,11 +4,12 @@
 // 3. 转换图片经官方注入面按会话挂入草稿栏；4. 卡片发送时经官方 setDraft 合并；
 // 5. settings.plugins.tab 缓存与供应商配置页。
 import { initRuntime } from "./runtime.js";
-import { activeSession, setActiveCtx, isComposerInputTarget } from "./session-state.js";
+import { activeSession, setActiveCtx, isComposerInputTarget, currentSessionId } from "./session-state.js";
 import { injectStyles } from "./ui/styles.js";
+import { addChips } from "./bus.js";
 import { classifyFile } from "./contract.js";
-import { intake, injectTexts, mergeChipsIntoDraft } from "./intake.js";
-import { attachImagesOfficially, mergeDraftBlocksOfficially } from "./official-face.js";
+import { intake, mergeChipsIntoDraft } from "./intake.js";
+import { attachFilesOfficially, mergeDraftBlocksOfficially } from "./official-face.js";
 import { AttachButton, AttachDock, ChipPill } from "./ui/components.js";
 import { CacheSettings } from "./ui/settings-ui.js";
 
@@ -33,7 +34,7 @@ window.__ModuleLoader__.load({
 					if (!transfer.types.includes("Files")) return;
 					const files = Array.from(transfer.files ?? []);
 					if (files.length === 0) return;
-					if (files.every((file) => classifyFile(file) === "native-image")) return; // 原生图片走内建管线
+					if (files.every((file) => ["native-image", "unsupported"].includes(classifyFile(file)))) return; // 无需转换的批次完整交还原生管线
 					event.preventDefault();
 					event.stopImmediatePropagation();
 					window.dispatchEvent(new Event("dragend")); // 复位内建 DropOverlay
@@ -49,13 +50,13 @@ window.__ModuleLoader__.load({
 						if (file !== null) files.push(file);
 					}
 					if (files.length === 0) return;
-					if (files.every((file) => classifyFile(file) === "native-image")) return;
+					if (files.every((file) => ["native-image", "unsupported"].includes(classifyFile(file)))) return;
 					event.preventDefault();
 					event.stopImmediatePropagation();
 					const text = event.clipboardData?.getData("text/plain") ?? "";
-					void intake(files).then(() => {
-						if (text.trim() !== "") injectTexts([{ name: "剪贴板", text, note: false }]);
-					});
+					const sessionId = currentSessionId();
+					void intake(files, sessionId);
+					if (text.trim() !== "") addChips([{ name: "剪贴板", text, kind: "text" }], sessionId);
 				};
 				// 发送瞬间把文档卡片并入草稿（Enter 提交 / 主按钮点击），随后由原生提交发送
 				const onKeyDownCapture = (event) => {
@@ -118,7 +119,7 @@ window.__ModuleLoader__.load({
 		// 测试出口：让 smoke-client 能真正 mount 组件（SSR），验证的不是"框架"而是"产品"
 		exports.__components = { AttachButton, AttachDock, ChipPill, CacheSettings };
 		// 测试出口：官方注入面调用（验证按会话寻址与回退语义）
-		exports.__officialFaces = { attachImagesOfficially, mergeDraftBlocksOfficially };
+		exports.__officialFaces = { attachFilesOfficially, mergeDraftBlocksOfficially };
 		return module.exports;
 	}
 });

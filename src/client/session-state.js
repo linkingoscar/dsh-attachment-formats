@@ -62,12 +62,12 @@ function resolveSessionId(explicit) {
 	if (typeof explicit === "string" && explicit !== "") return explicit;
 	return shellCurrentSessionId() ?? activeSession.sessionId;
 }
-function currentCwd() {
+function currentCwd(sessionId) {
 	const { sessionsService } = activeSession;
 	if (sessionsService === undefined) return undefined;
 	try {
 		const snapshot = sessionsService.list.getSnapshot();
-		const id = resolveSessionId(undefined);
+		const id = resolveSessionId(sessionId);
 		return snapshot?.byId?.[id]?.cwd ?? undefined;
 	} catch {
 		return undefined;
@@ -103,7 +103,7 @@ function currentSessionPhase(sessionId) {
 		return undefined;
 	}
 }
-/** 等当前会话空闲再投喂图片（忙时原生管线会拒绝合成 drop，图片会流到其它空闲会话）。 */
+/** 等原会话结束 admission 事务后重试定向挂载；超时后由接口再次裁决。 */
 function waitForSessionIdle(sessionId, timeoutMs = 15_000) {
 	return new Promise((/** @type {(value: void) => void} */ resolve) => {
 		const busy = (phase) => phase === "adjudicating" || phase === "submitting";
@@ -125,9 +125,9 @@ function waitForSessionIdle(sessionId, timeoutMs = 15_000) {
 // ---- v2b：上下文余量感知的直插上限 -------------------------------
 // 读 token-meter 的 contextPressure 投影（contextWindow × projectedTokens），
 // 换算为保守字符预算（中文 ≈1.5 字符/token）；缺数据回退固定阈值。
-function contextBudgetChars() {
+function contextBudgetChars(explicitSessionId) {
 	const { sessionsService } = activeSession;
-	const sessionId = resolveSessionId(undefined);
+	const sessionId = resolveSessionId(explicitSessionId);
 	if (sessionsService === undefined || sessionId === undefined) return undefined;
 	try {
 		const face = sessionsService.binding(sessionId)?.session?.projections?.faceOf?.("contextPressure");
@@ -144,8 +144,8 @@ function contextBudgetChars() {
 		return undefined;
 	}
 }
-function currentDirectLimit() {
-	const budget = contextBudgetChars();
+function currentDirectLimit(sessionId) {
+	const budget = contextBudgetChars(sessionId);
 	return budget === undefined ? DIRECT_TEXT_CHARS : Math.min(DIRECT_TEXT_CHARS, budget);
 }
 

@@ -1,26 +1,14 @@
-// 接收管线：分类 → 本地/主机转换 → 芯片/图片分流 → 官方注入（回退合成 drop）。
+// 接收管线：分类 → 本地/主机转换 → 芯片/图片分流 → 按原会话官方注入。
 import { DIRECT_TEXT_CHARS, MAX_CACHE_BYTES, MAX_TEXT_BYTES, b64ToBytes, classifyFile } from "./contract.js";
 import {
   composerTextarea, composerReady, currentSessionId, resolveSessionId, currentCwd,
   currentDirectLimit, currentSessionPhase, waitForSessionIdle, nextIntakeSeq, peekIntakeSeq,
 } from "./session-state.js";
-import { setBus, addChips, setChips, busState, chipsState } from "./bus.js";
-import { attachImagesOfficially, mergeDraftBlocksOfficially, inputShellOf } from "./official-face.js";
+import { setBus, addChips, setChips, getBusState, getChipsState } from "./bus.js";
+import { attachFilesOfficially, mergeDraftBlocksOfficially, inputShellOf } from "./official-face.js";
 import { convertRemote, resolveWorkspaceRef, fileToPngFile, fileToText } from "./browser-convert.js";
 
 // ---- injection into the native pipeline ------------------------------
-function redispatchDrop(files) {
-	const dt = new DataTransfer();
-	for (const file of files) dt.items.add(file);
-	let event;
-	try {
-		event = new DragEvent("drop", { bubbles: false, cancelable: true, dataTransfer: dt });
-	} catch {
-		event = new Event("drop", { bubbles: false, cancelable: true });
-		Object.defineProperty(event, "dataTransfer", { value: dt });
-	}
-	document.dispatchEvent(event);
-}
 function injectTexts(notes) {
 	const el = composerTextarea();
 	if (el === null) return false;
@@ -56,7 +44,7 @@ function injectTexts(notes) {
  */
 function mergeChipsIntoDraft() {
 	const sessionId = currentSessionId();
-	const mine = chipsState.sessionId === sessionId ? chipsState.items : [];
+	const mine = getChipsState(sessionId).items;
 	if (mine.length === 0) return true;
 	const blocks = mine.map((item) => (
 		item.raw ? `\n\n${item.text}`
@@ -74,7 +62,7 @@ function mergeChipsIntoDraft() {
 			return false;
 		}
 		setChips([], sessionId);
-		if (busState !== null && busState.phase === "done") setBus(null);
+		if (getBusState(sessionId)?.phase === "done") setBus(null);
 		return true;
 	}
 	// 回退：DOM 桥接（未发布契约；命令认领/忙态一律保留卡片）
@@ -97,7 +85,7 @@ function mergeChipsIntoDraft() {
 		return false;
 	}
 	setChips([], sessionId);
-	if (busState !== null && busState.phase === "done") setBus(null);
+	if (getBusState(sessionId)?.phase === "done") setBus(null);
 	return true;
 }
 function sendChipsNow() {
@@ -133,22 +121,27 @@ async function intake(files, explicitSessionId) {
 	if (files.length === 0) return;
 	const sessionId = resolveSessionId(explicitSessionId);
 	const seq = nextIntakeSeq(sessionId);
-	if (!composerReady()) {
-		setBus({
+	const updateStatus = (patch) => {
+		if (seq === peekIntakeSeq(sessionId)) setBus(patch, sessionId);
+	};
+	if (sessionId === undefined || !composerReady()) {
+		updateStatus({
 			phase: "error",
 			label: "无法接收附件",
 			detail: "请先选择/创建工作区，并等待当前回复完成后再试"
 		});
 		return;
 	}
-	const cwd = currentCwd();
-	const directLimit = currentDirectLimit();
+	const cwd = currentCwd(sessionId);
+	const directLimit = currentDirectLimit(sessionId);
 	const images = [];
+	const nativeFiles = [];
+	let attachedCount = 0;
 	const chips = [];
 	const failedNames = [];
 	let firstError = null;
 	let budgetTiered = false;
-	setBus({
+	updateStatus({
 		phase: "working",
 		label: files.length === 1 ? `正在处理 ${files[0].name}` : `正在处理 ${files.length} 个文件`,
 		detail: ""
@@ -162,10 +155,10 @@ async function intake(files, explicitSessionId) {
 					break;
 				}
 				case "browser-image": {
-					setBus({ phase: "working", label: file.name, detail: "正在转换为图片…" });
+					updateStatus({ phase: "working", label: file.name, detail: "正在转换为图片…" });
 					const png = await fileToPngFile(file);
 					if (png !== null) images.push(png);
-					else setBus({ phase: "error", label: file.name, detail: "图片解码失败，已跳过" });
+					else throw new Error("图片解码失败，未附加");
 					break;
 				}
 				case "text": {
@@ -178,7 +171,7 @@ async function intake(files, explicitSessionId) {
 					// SHA-256」解析同源路径，命中则挂「引用」卡片，不读内容、
 					// 不上传字节，模型用 read 工具读取。
 					if (file.size > 512 * 1024) {
-						setBus({ phase: "working", label: file.name, detail: "正在校验工作区同源文件…" });
+						updateStatus({ phase: "working", label: file.name, detail: "正在校验工作区同源文件…" });
 						const ref = await resolveWorkspaceRef(file, cwd, sessionId);
 						if (ref !== null) {
 							chips.push({
@@ -193,7 +186,7 @@ async function intake(files, explicitSessionId) {
 					// ≤2MB：本地解码判断直插还是转存；2–16MB：本地不再解码
 					// （避免大文本拖慢浏览器），直接交主机 text-cache 全量落盘。
 					if (file.size <= MAX_TEXT_BYTES) {
-						setBus({ phase: "working", label: file.name, detail: "正在读取文本…" });
+						updateStatus({ phase: "working", label: file.name, detail: "正在读取文本…" });
 						const text = await fileToText(file);
 						if (text.length <= directLimit) {
 							chips.push({ name: file.name, kind: "text", text });
@@ -201,7 +194,7 @@ async function intake(files, explicitSessionId) {
 						}
 						// 超过上下文预算：上传主机落盘 + 索引卡，杜绝顶爆上下文
 						if (text.length <= DIRECT_TEXT_CHARS) budgetTiered = true;
-						setBus({
+						updateStatus({
 							phase: "working",
 							label: file.name,
 							detail: text.length <= DIRECT_TEXT_CHARS ? "上下文余量不足，正在转存并生成索引…" : "文档较大，正在转存并生成索引…"
@@ -222,7 +215,7 @@ async function intake(files, explicitSessionId) {
 						break;
 					}
 					// 2MB < size ≤ 16MB：直接交主机（工作区外的大文本也能完整转存）
-					setBus({ phase: "working", label: file.name, detail: "文档较大，正在上传转存并生成索引…" });
+					updateStatus({ phase: "working", label: file.name, detail: "文档较大，正在上传转存并生成索引…" });
 					const cached = await convertRemote(file, "text-cache", cwd, sessionId, directLimit);
 					if (cached.kind === "index") {
 						chips.push({ name: file.name, kind: "card", text: cached.card });
@@ -243,7 +236,7 @@ async function intake(files, explicitSessionId) {
 				case "epub":
 				case "odt":
 				case "rtf": {
-					setBus({
+					updateStatus({
 						phase: "working",
 						label: file.name,
 						detail: kind === "pdf" ? "正在提取文字层…" : "正在提取文本…"
@@ -257,7 +250,7 @@ async function intake(files, explicitSessionId) {
 								const r = await fetch(`/api/attach-formats/progress?jobId=${encodeURIComponent(jobId)}`);
 								const p = await r.json();
 								if (p?.found === true && p.phase === "working" && p.label) {
-									setBus({ phase: "working", label: file.name, detail: p.label });
+									updateStatus({ phase: "working", label: file.name, detail: p.label });
 								}
 							} catch { /* 轮询失败忽略：主请求自有结果 */ }
 						}, 600);
@@ -266,7 +259,7 @@ async function intake(files, explicitSessionId) {
 					try {
 						result = await convertRemote(file, kind, cwd, sessionId, directLimit, {
 							jobId,
-							onUploadPercent: (pct) => setBus({ phase: "working", label: file.name, detail: `上传中 ${pct}%` })
+							onUploadPercent: (pct) => updateStatus({ phase: "working", label: file.name, detail: `上传中 ${pct}%` })
 						});
 					} finally {
 						if (pollTimer !== null) clearInterval(pollTimer);
@@ -298,9 +291,9 @@ async function intake(files, explicitSessionId) {
 					break;
 				}
 				case "tiff": {
-					setBus({ phase: "working", label: file.name, detail: "正在转换为图片…" });
+					updateStatus({ phase: "working", label: file.name, detail: "正在转换为图片…" });
 					const result = await convertRemote(file, kind, cwd, sessionId, directLimit, {
-						onUploadPercent: (pct) => setBus({ phase: "working", label: file.name, detail: `上传中 ${pct}%` })
+						onUploadPercent: (pct) => updateStatus({ phase: "working", label: file.name, detail: `上传中 ${pct}%` })
 					});
 					if (result.kind === "images") {
 						for (const image of result.images) {
@@ -315,16 +308,13 @@ async function intake(files, explicitSessionId) {
 					break;
 				}
 				default: {
-					failedNames.push(file.name);
-					const message = `暂不支持该格式${file.type === "" ? "" : `（${file.type}）`}，已跳过`;
-					if (firstError === null) firstError = message;
-					setBus({ phase: "error", label: file.name, detail: message });
+					nativeFiles.push(file);
 				}
 			}
 		} catch (error) {
 			failedNames.push(file.name);
 			if (firstError === null) firstError = error instanceof Error ? error.message : String(error);
-			setBus({
+			updateStatus({
 				phase: "error",
 				label: file.name,
 				detail: error instanceof Error ? error.message : String(error)
@@ -332,44 +322,40 @@ async function intake(files, explicitSessionId) {
 		}
 	}
 	if (seq !== peekIntakeSeq(sessionId)) return;
-	if (images.length > 0) {
-		const readyLabel = images.length === 1 ? "图片已就绪" : `${images.length} 张图片已就绪`;
-		// 优先官方注入面：按当前会话精确寻址，多会话互不串扰；
-		// 忙时被拒 → 等空闲重试一次；面不可用 → 合成 drop 兜底。
-		let attached = attachImagesOfficially(images, sessionId);
+	const attachments = [...images, ...nativeFiles];
+	if (attachments.length > 0) {
+		let attached = attachFilesOfficially(attachments, sessionId);
 		if (attached === false) {
-			setBus({ phase: "working", label: readyLabel, detail: "等待当前会话空闲后附加…" });
+			updateStatus({ phase: "working", label: "附件已就绪", detail: "等待原会话空闲后附加…" });
 			await waitForSessionIdle(sessionId);
 			if (seq !== peekIntakeSeq(sessionId)) return;
-			attached = attachImagesOfficially(images, sessionId);
+			attached = attachFilesOfficially(attachments, sessionId);
 		}
-		if (attached === null) {
-			setBus({ phase: "working", label: readyLabel, detail: "等待当前会话空闲后附加…" });
-			await waitForSessionIdle(sessionId);
-			if (seq !== peekIntakeSeq(sessionId)) return;
-			redispatchDrop(images); // 旧版宿主兜底：交原生管线裁决
-		} else if (attached === false) {
-			failedNames.push("(图片)");
-			if (firstError === null) firstError = "当前会话仍忙，图片未附加，请稍后重试";
-			setBus({ phase: "error", label: "图片附加失败", detail: firstError });
+		if (attached === true) {
+			attachedCount = attachments.length;
+		} else {
+			failedNames.push(...attachments.map((file) => file.name));
+			firstError ??= attached === null
+				? "原会话的附件接口不可用，未附加；请回到原会话重试或使用原生上传按钮"
+				: "原会话未接受附件，请稍后重试";
 		}
 	}
 	if (chips.length > 0) addChips(chips, sessionId);
 	const parts = [];
-	if (images.length > 0) parts.push(`${images.length} 张图片`);
+	if (attachedCount > 0) parts.push(`${attachedCount} 个原生附件`);
 	if (chips.length > 0) parts.push(`${chips.length} 个文档卡片`);
 	if (parts.length === 0 && failedNames.length > 0) {
-		setBus({ phase: "error", label: "附件处理失败", detail: firstError ?? "转换失败" });
+		updateStatus({ phase: "error", label: "附件处理失败", detail: firstError ?? "转换失败" });
 		return;
 	}
-	setBus({
-		phase: "done",
+	updateStatus({
+		phase: failedNames.length > 0 ? "error" : "done",
 		label: parts.length > 0
 			? `已挂载 ${parts.join("、")}${failedNames.length > 0 ? `；${failedNames.length} 个文件失败` : ""}，输入框保持干净，发送时自动并入消息`
 			: "附件处理完成",
-		detail: budgetTiered ? "部分文档因上下文余量不足转为索引卡（可用 read 工具按需读取，或 /attach full 并入全文）" : ""
+		detail: firstError ?? (budgetTiered ? "部分文档因上下文余量不足转为索引卡（可用 read 工具按需读取，或 /attach full 并入全文）" : "")
 	});
 }
 
 
-export { redispatchDrop, injectTexts, mergeChipsIntoDraft, sendChipsNow, intake };
+export { injectTexts, mergeChipsIntoDraft, sendChipsNow, intake };

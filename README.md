@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness Attachment Expansion (dsh-plugin, Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.12.0-informational)](#)
+[![version](https://img.shields.io/badge/version-0.12.1-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -39,7 +39,7 @@ dsh plugin --profile web add dsh-attachment-formats
 | **TIFF (.tiff/.tif)** | sharp (libvips) → PNG pages (multi-page, ≤20) | native image draft rail |
 | txt / md / json / code | read in the browser (UTF-8, GB18030 fallback) | document card (merged on send); over-limit → spill + index card |
 | BMP / ICO / AVIF / SVG etc. | browser decode → canvas → PNG | native image draft rail |
-| iWork / audio-video / archives | — (not yet supported; explicit notice, skipped) | — |
+| iWork / audio-video / archives | no conversion; passed to native upload | native file attachment (dsh 0.1.3+) |
 
 ## Document cards (Codex-style mounting, composer stays clean)
 
@@ -173,9 +173,10 @@ and v0.6 roadmap): `docs/upgrade-v6.md`.
 - **Drag & drop**: drop a PDF / Office / text file anywhere on the page.
 - **Paste**: copy a file and Ctrl+V into the composer (or the whole page).
 
-Native image drag/paste stays on the harness built-in pipeline; when a single drop mixes
-other formats in, the plugin takes over the whole batch (converts first, then hands the
-produced images back to the built-in draft rail as a "synthetic drop").
+Batches containing only native images or unsupported conversion formats (such as ZIP)
+pass through to the host unchanged. Mixed batches convert supported formats and
+attach images and remaining files to the original session through its native
+interface; documents stay as cards. There is no global synthetic-drop fallback.
 
 ## Architecture
 
@@ -183,7 +184,7 @@ produced images back to the built-in draft rail as a "synthetic drop").
 dsh-attachment-formats/
 ├── lib/
 │   ├── index.js          # host half: POST /api/attach-formats/convert + engine routing
-│   ├── client.js         # browser half: button/drop interception/synthetic drop/text injection/status bar
+│   ├── client.js         # browser half: button/drop interception/scoped attachments/document cards/status bar
 │   ├── cache.js          # workspace .dsh-attachments spill/manifest/INDEX.md/cleanup
 │   ├── py/pymupdf4llm_convert.py  # venv high-fidelity engine (subprocess call)
 │   └── convert/
@@ -215,12 +216,14 @@ dsh-attachment-formats/
   headroom); spill page images ≤100 pages (1100px wide; PNG over the per-image byte
   budget falls back to JPEG); scanned-page image cap follows the deployment limit; OCR
   ≤20 pages per run (2000px wide), confidence <45 falls back to page images.
-- Converted page images mount through the harness's **official per-session
-  injection face** (`ctx.conversation.createDraftImages` + `input.addImages`,
-  dsh ≥ v0.1.1) — attachments always land in the conversation you are looking
-  at, never in another idle dialog. On older hosts the plugin falls back to the
-  legacy synthetic drop (which waits for the current conversation to become
-  idle first).
+- Resolve the service through `ctx.get("conversation")`. Converted images and
+  native files use `createDrafts(sessionId, files)` +
+  `addAttachments(ids)` on dsh 0.1.3+. Legacy image-only hosts use
+  `createDraftImages` + `addImages`. Both target the conversation where intake
+  started, even after navigation. Missing/rejected interfaces report an error;
+  the plugin never broadcasts a synthetic drop. Batches with no convertible files
+  pass through untouched; mixed batches convert supported formats and attach
+  remaining files through the original session’s native pipeline.
 - Document-card content merges at send time through the official composer
   write path (`setDraft`, phase-gated: plain drafts only, command claims are
   never polluted). Composer detection supports both the v0.1.1 textarea and the
@@ -288,17 +291,23 @@ afterwards).
   heuristics (weak on documents without strong heading styling) — the index card still
   carries line/page counts and reading pointers.
 - iWork and archives are not converted yet.
-- Attachments are attributed to the shell's **current conversation** (the one being
-  viewed). On dsh ≥ v0.1.1 the official injection face addresses that session
-  exactly; on older hosts the synthetic-drop fallback can be caught by other
-  *idle* conversations — prefer attaching images with a single conversation
-  open there (text/code files are unaffected: they always stay in the current dialog).
+- Images, document cards, clipboard text and progress belong to the conversation
+  where intake started. Switching conversations keeps each draft separate.
+  Native attachments require a working per-session interface (dsh 0.1.1+ for
+  images; 0.1.3+ for general files). Older hosts no longer receive synthetic drops.
 - The DOM event bridge is now only a fallback for hosts without the official
   input face; if it breaks, the symptom is "card content didn't enter the
   message" on legacy hosts only, and the card's **send** button is the
   fallback (synthetic Enter path). The image path is never affected.
 
 ## Releases
+
+- **[v0.12.1](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.12.1)** — compatibility with dsh v0.1.3-alpha.1: session-addressed
+  `createDrafts` / `addAttachments` / `releaseDraftAttachments`; ZIP and other
+  unsupported formats coexist with native upload, including mixed batches.
+  Removes global-drop fallback, preserves cards/progress/clipboard text across
+  session switches, and reports attachment rejection without claiming success.
+  The browser bundle also isolates its globals for host reloads.
 
 - **v0.12.0** — raw binary uploads replace base64 JSON on the default client path;
   OOXML/epub/odt ZIP containers gain entry-count, per-entry, total-size and compression-
@@ -310,7 +319,7 @@ afterwards).
   host launch-token/Host/Origin enforcement for plugin routes; v0.1.1 remains supported.
 
 - **[v0.10.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.10.0)**
-  (latest) — Codex-parity UX + hardening: chunked upload progress (XHR) and a
+  — Codex-parity UX + hardening: chunked upload progress (XHR) and a
   host-side job channel streaming per-page render/OCR progress into the status
   bar; card click opens a page-image lightbox (new path-traversal-guarded
   `/api/attach-formats/file` route); large-file base64 encoding moved into a
@@ -318,7 +327,7 @@ afterwards).
   `ctx.credentials.set` seam (config keeps references, not values); doc-server
   URL SSRF guard (http/https only, no userinfo); `verify:build` freshness gate.
 - **[v0.9.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.9.0)**
-  (latest) — dsh-philosophy alignment: conversion cache moves to
+  — dsh-philosophy alignment: conversion cache moves to
   `$DSH_HOME/storages/attachment-docs/<workspaceHash>/` by default (workspace
   mode now opt-in; legacy `cwd/.dsh-attachments` auto-migrates once per
   workspace); DeepSeek Vision joins the `auto` OCR chain when a key is

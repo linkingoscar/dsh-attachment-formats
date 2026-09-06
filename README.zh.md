@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness 附件扩展（dsh-plugin，Codex 风格）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.12.0-informational)](#)
+[![version](https://img.shields.io/badge/version-0.12.1-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -35,7 +35,7 @@ dsh plugin --profile web add github:linkingoscar/dsh-attachment-formats
 | **TIFF (.tiff/.tif)** | sharp（libvips）→ PNG 页（多页支持，≤20 页） | 原生图片草稿栏 |
 | txt / md / json / 代码等 | 浏览器本地读取（UTF-8，回退 GB18030） | 文档卡片（发送时并入）；超限转存 + 索引卡片 |
 | BMP / ICO / AVIF / SVG 等 | 浏览器解码后画布转 PNG | 原生图片草稿栏 |
-| iWork / 音视频 / 压缩包 | —（暂不支持，明确提示并跳过） | — |
+| iWork / 音视频 / 压缩包 | 不转换，交给原生上传 | 原生文件附件（dsh 0.1.3+） |
 
 ## 文档卡片（Codex 式挂载，输入框保持干净）
 
@@ -150,9 +150,9 @@ dsh plugin --profile web add github:linkingoscar/dsh-attachment-formats
 - **拖放**：把 PDF / Office / 文本文件直接拖到页面任意位置。
 - **粘贴**：复制文件后 Ctrl+V 到输入框（或整页粘贴）。
 
-原生图片拖放/粘贴仍由 Harness 内建管线处理；只要一次拖放里混入其它格式，
-本插件接管整个批次（先转换，再优先经官方注入面把产出的图片挂入当前会话的
-内建草稿栏；旧版宿主回退「合成 drop」）。
+原生图片和不支持转换的文件（如 ZIP）拖放/粘贴整批交给 Harness 内建管线。
+混入 PDF / Office / 文本等转换格式时，插件接收整个批次，转换后把图片和其余
+原始文件定向挂入原会话，文档保留为卡片；不再使用全局合成 drop。
 
 ## 架构
 
@@ -160,7 +160,7 @@ dsh plugin --profile web add github:linkingoscar/dsh-attachment-formats
 projects/dsh-attachment-formats/
 ├── lib/
 │   ├── index.js          # 主机半区：POST /api/attach-formats/convert + 引擎路由
-│   ├── client.js         # 浏览器半区：按钮/拖放拦截/合成 drop/文本注入/状态条
+│   ├── client.js         # 浏览器半区：按钮/拖放拦截/定向附件/文档卡片/状态条
 │   ├── cache.js          # 工作区 .dsh-attachments 落盘/manifest/INDEX.md/清理
 │   ├── py/pymupdf4llm_convert.py  # venv 高保真引擎（子进程调用）
 │   └── convert/
@@ -190,10 +190,9 @@ projects/dsh-attachment-formats/
 - 分级阈值：全文卡片并入上限 8 万字符（v2b 按上下文余量自适应压低）；缓存
   页图 ≤100 页（1100px 宽，PNG 超单图字节预算回退 JPEG）；扫描件页图上限
   沿用部署限额；OCR 单次 ≤20 页（2000px 宽），置信度 <45 回退页面图。
-- 转换出的页面图片优先经 Harness 官方按会话注入面挂入草稿栏
-  （dsh ≥ v0.1.1 的 `ctx.conversation.createDraftImages` + `input.addImages`，
-  精确寻址当前会话，杜绝多会话串扰）；旧版宿主回退合成 drop（先等当前会话
-  空闲）。文档卡片在发送瞬间经官方 `setDraft` 写路径并入草稿（phase 门控：
+- 转换图片通过 `ctx.get("conversation")` 获取服务，dsh 0.1.3+ 使用
+  `createDrafts(sessionId, files)` + `addAttachments(ids)`，旧版使用
+  `createDraftImages` + `addImages`；接口缺失时明确报错。文档卡片在发送瞬间经官方 `setDraft` 写路径并入草稿（phase 门控：
   仅 plain 相合并，命令认领态绝不污染）；输入框定位同时支持 v0.1.1 textarea
   与 v0.1.2 Lexical `contenteditable`，旧 textarea DOM 事件桥保留为回退。
   图片路径完全独立、不受影响。
@@ -242,15 +241,21 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 - 大纲优先用书签目录；无书签的 PDF 回退字号启发式（对无标题样式的文档较弱），
   索引卡仍提供行数/页数与读取指引。
 - iWork、压缩包等暂不转换。
-- 附件归属当前对话：dsh ≥ v0.1.1 经官方注入面精确寻址当前会话，卡片与图片
-  一定落在你正在看的这个对话框；旧版宿主的合成 drop 兜底路径仍可能被其它
-  **空闲**对话接住，建议该场景下附图片时只开一个对话（文本/代码文件不受影响，
-  始终留在当前对话）。
+- 图片、文档卡片、剪贴板文字和进度均归属开始接收附件时的会话，切换会话后
+  各自保留。dsh 0.1.3+ 使用 `createDrafts(sessionId, files)` + `addAttachments`，
+  旧版图片接口继续兼容。接口缺失或拒绝时明确报错，不再广播合成 drop。
+  纯原生图片/不支持转换的格式整批放行；混合批次转换支持格式后，将其余文件
+  经原生管线挂入原会话。通用文件需 dsh 0.1.3+，图片定向接口需 dsh 0.1.1+。
 - DOM 事件桥已降级为旧版宿主（无官方输入面）的回退；若其失效，症状仅出现在
   旧版宿主上的「卡片内容没进消息」，此时可用卡片条的**发送**按钮兜底
   （官方 submit 或合成 Enter 路径），图片路径始终不受影响。
 
 ## 发布版本
+
+- **[v0.12.1](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.12.1)** —— 适配 dsh v0.1.3-alpha.1 的 `createDrafts` /
+  `addAttachments` / `releaseDraftAttachments`；ZIP 等格式与原生上传共存，
+  混合批次也能正确分流；移除全局 drop 回退；切换会话时保留各自卡片、进度
+  和剪贴板文字；挂载被拒绝时不再误报成功；构建产物隔离顶层变量，支持宿主重新加载。
 
 - **v0.12.0** —— 客户端默认改为原始二进制上传，移除 base64 JSON 的内存放大；
   OOXML/epub/odt 增加 ZIP 条目数、单条、总解压大小和压缩比预算；附件任务按
@@ -261,14 +266,14 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
   复用宿主 launch-token 与 Host/Origin 校验；继续兼容 v0.1.1。
 
 - **[v0.10.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.10.0)**
-  （最新）—— 对标 Codex 体验 + 加固：分块上传进度（XHR）与宿主 job 通道
+  —— 对标 Codex 体验 + 加固：分块上传进度（XHR）与宿主 job 通道
   （渲染/OCR 页级进度实时进状态条）；卡片点击打开页图灯箱（新增防路径穿越的
   `/api/attach-formats/file` 路由）；大文件 base64 编码挪入 Web Worker
   （同步回退）；密钥写路径接官方 `ctx.credentials.set`（配置文件只留引用）；
   文档解析服务 URL SSRF 防护（仅 http/https、禁 userinfo）；`verify:build`
   产物新鲜度门禁。
 - **[v0.9.0](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.9.0)**
-  （最新）—— 对齐 dsh 哲学：转换缓存默认迁 `$DSH_HOME/storages/attachment-docs/<workspaceHash>/`
+  —— 对齐 dsh 哲学：转换缓存默认迁 `$DSH_HOME/storages/attachment-docs/<workspaceHash>/`
   （工作区模式改为 opt-in；旧 `cwd/.dsh-attachments` 每工作区自动一次性迁移）；
   DeepSeek Vision 探测到 Key 即进入 `auto` OCR 链（可关，首次转录明示按 token 计费）；
   凭据优先走官方 `ctx.credentials` seam（文件解析仅回退）；设置增加 revision 乐观锁

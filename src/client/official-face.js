@@ -1,13 +1,13 @@
-// 官方注入面（dsh v0.1.1+：ctx.conversation 公开服务）。
-// createDraftImages + input.for(scope) 按 sessionId 精确寻址，
-// 替代广播式合成 drop 与 DOM 文本桥接；两者均降级为回退路径。
+// 官方注入面：新版通用附件与旧版图片接口都按原 sessionId 精确寻址。
 import { activeCtx, activeSession } from "./session-state.js";
+import { NATIVE_IMAGE_TYPES } from "./contract.js";
 
 function conversationFace() {
 	const ctx = activeCtx;
 	if (ctx === null || ctx === undefined) return undefined;
 	try {
-		return ctx.conversation; // cordis Service tracker：属性读取触发绑定
+		// 新版宿主自身也通过 ctx.get 获取此服务；未注入的属性访问可能不可用。
+		return typeof ctx.get === "function" ? ctx.get("conversation") : ctx.conversation;
 	} catch {
 		return undefined;
 	}
@@ -23,29 +23,38 @@ function inputShellOf(sessionId) {
 	}
 }
 /**
- * 经官方面把图片文件挂入指定会话的草稿栏。
+ * 经官方面把附件挂入指定会话；旧版仅支持图片。
  * @returns {boolean|null} true=成功；false=面可用但被拒（忙）；null=面不可用
  */
-function attachImagesOfficially(files, sessionId) {
+function attachFilesOfficially(files, sessionId) {
 	const conversation = conversationFace();
-	if (conversation === undefined || typeof conversation.createDraftImages !== "function") return null;
+	if (conversation === undefined) return null;
+	if (typeof sessionId !== "string" || sessionId === "") return null;
+	if (typeof activeSession.sessionsService?.binding === "function"
+		&& activeSession.sessionsService.binding(sessionId) === undefined) return null;
 	const shell = inputShellOf(sessionId);
-	if (shell === undefined || typeof shell.addImages !== "function") return null;
+	if (shell === undefined) return null;
+	const modern = typeof conversation.createDrafts === "function";
+	const create = modern ? conversation.createDrafts : conversation.createDraftImages;
+	const add = modern ? shell.addAttachments : shell.addImages;
+	const release = modern ? conversation.releaseDraftAttachments : conversation.releaseDraftImages;
+	if (typeof create !== "function" || typeof add !== "function" || typeof release !== "function") return null;
+	if (!modern && files.some((file) => !NATIVE_IMAGE_TYPES.has(file.type))) return null;
 	let created = null;
 	try {
-		created = conversation.createDraftImages(files);
+		created = modern ? create.call(conversation, sessionId, files) : create.call(conversation, files);
 	} catch {
-		return null;
+		return false;
 	}
 	let ok = false;
 	try {
-		ok = shell.addImages(created.map((image) => image.id)) !== false;
+		ok = add.call(shell, created.map((attachment) => attachment.id)) === true;
 	} catch {
 		ok = false;
 	}
-	if (!ok && typeof conversation.releaseDraftImages === "function") {
+	if (!ok) {
 		try {
-			conversation.releaseDraftImages(created);
+			release.call(conversation, created);
 		} catch {
 			/* best-effort cleanup */
 		}
@@ -71,4 +80,4 @@ function mergeDraftBlocksOfficially(blocks, sessionId) {
 }
 
 
-export { conversationFace, inputShellOf, attachImagesOfficially, mergeDraftBlocksOfficially };
+export { conversationFace, inputShellOf, attachFilesOfficially, mergeDraftBlocksOfficially };

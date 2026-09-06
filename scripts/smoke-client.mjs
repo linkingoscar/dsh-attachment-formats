@@ -27,6 +27,7 @@ function check(label, ok, extra = "") {
 
 // ---- 浏览器环境桩 --------------------------------------------------------
 const documentListeners = [];
+const dispatchedDrops = [];
 const HTMLTextAreaElementStub = function HTMLTextAreaElement() {};
 let queriedTextarea = null; // 可切换的假输入框
 let queriedComposerInput = null;
@@ -37,7 +38,7 @@ const documentStub = {
   querySelector: (selector) => selector.endsWith("textarea") ? queriedTextarea : queriedComposerInput,
   addEventListener: (type, fn, capture) => documentListeners.push({ type, capture: !!capture, fn }),
   removeEventListener: () => {},
-  dispatchEvent: () => true
+  dispatchEvent: (event) => { dispatchedDrops.push(event); return true; }
 };
 const windowStub = {
   __ModuleLoader__: {
@@ -92,6 +93,10 @@ const context = vm.createContext({
   console,
   setTimeout,
   clearTimeout,
+  setInterval,
+  clearInterval,
+  File,
+  Blob,
   atob: (s) => Buffer.from(s, "base64").toString("binary"),
   btoa: (s) => Buffer.from(s, "binary").toString("base64"),
   TextDecoder,
@@ -274,7 +279,7 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
 
 	// 图片注入：createDraftImages + addImages 按会话寻址
 	const faces = clientModule.__officialFaces;
-	const attached = faces.attachImagesOfficially([{ name: "p1.png", type: "image/png" }], "s1");
+	const attached = faces.attachFilesOfficially([{ name: "p1.png", type: "image/png" }], "s1");
 	check(
 		"官方图片注入：createDraftImages+addImages 被调用",
 		attached === true && createdBatches.length === 1 && Array.isArray(addedIds) && addedIds.length === 1,
@@ -339,6 +344,142 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
 	delete ctx.sessions.scope;
 }
 
+// ---- 0.1.3：原生透传、混合转换、会话切换和拒绝清理 ---------------------
+{
+  const zip = { name: "archive.zip", type: "application/zip" };
+  for (const files of [[zip], [zip, fakeImageFile]]) {
+    const event = {
+      dataTransfer: { types: ["Files"], files },
+      clipboardData: { items: files.map(file => ({ kind: "file", getAsFile: () => file })) },
+      preventDefault() { this.prevented = true; },
+      stopImmediatePropagation() { this.stopped = true; }
+    };
+    drops[0].fn(event);
+    pastes[0].fn(event);
+    check("ZIP/ZIP+PNG drop 和 paste 完整放行", !event.prevented && !event.stopped);
+  }
+
+  queriedComposerInput = { isContentEditable: true, getAttribute: () => null };
+  const batches = [], released = [], added = [];
+  const shells = new Map();
+  let admission = true;
+  ctx.sessions.scope = id => ({ scopeId: id });
+  ctx.conversation = {
+    createDrafts(sessionId, files) {
+      const drafts = files.map((file, index) => ({ id: 'new-' + batches.length + '-' + index, file }));
+      batches.push({ sessionId, files, drafts });
+      return drafts;
+    },
+    releaseDraftAttachments(drafts) { released.push(drafts); },
+    createDraftImages() { throw new Error("新版不应走旧接口"); },
+    input: { for(scope) {
+      if (!shells.has(scope.scopeId)) shells.set(scope.scopeId, {
+        draft: "用户问题",
+        state: { getSnapshot: () => ({ phase: "plain", draft: shells.get(scope.scopeId).draft }) },
+        setDraft(text) { this.draft = text; },
+        addAttachments(ids) {
+          if (admission === "throw") throw new Error("admission failed");
+          if (admission === true) added.push({ sessionId: scope.scopeId, ids });
+          return admission;
+        }
+      });
+      return shells.get(scope.scopeId);
+    } }
+  };
+  // Real 0.1.3 Cordis exposes the service via ctx.get; property reads are not guaranteed.
+  const modernConversation = ctx.conversation;
+  delete ctx.conversation;
+  ctx.get = name => name === "conversation" ? modernConversation : undefined;
+  const tick = () => new Promise(resolve => setTimeout(resolve, 30));
+  const drop = files => drops[0].fn({
+    dataTransfer: { types: ["Files"], files }, preventDefault() {}, stopImmediatePropagation() {}
+  });
+  const enter = () => keydowns[0].fn({ key: "Enter", target: queriedComposerInput });
+  const md = (name, content) => ({
+    name, type: "text/markdown", size: 100,
+    arrayBuffer: async () => new TextEncoder().encode(content).buffer
+  });
+  let finishBitmap;
+  context.createImageBitmap = () => new Promise(resolve => { finishBitmap = resolve; });
+  const createElement = documentStub.createElement;
+  documentStub.createElement = tag => tag === "canvas" ? {
+    getContext: () => ({ fillRect() {}, drawImage() {} }),
+    toBlob: callback => callback(new Blob(["converted image"], { type: "image/png" }))
+  } : createElement(tag);
+
+  shellSnapshot.current = "s1";
+  drop([{ name: "convert.bmp", type: "image/bmp" }, zip, fakeImageFile, md("s1.md", "原会话正文")]);
+  // Conversion is still pending while another session receives its own document.
+  shellSnapshot.current = "s2";
+  drop([md("s2.md", "第二会话正文")]);
+  await tick();
+  finishBitmap({ width: 2, height: 2, close() {} });
+  await tick();
+  check("转换中切换会话：新附件创建和挂载均锁定 s1",
+    batches.length === 1 && batches[0].sessionId === "s1" && added[0]?.sessionId === "s1");
+  check("混合 BMP/ZIP/PNG/文档：转换 PNG 与原始文件各挂载一次",
+    batches[0]?.files.length === 3 && batches[0].files[0].name === "convert.png"
+    && batches[0].files[0].type === "image/png" && batches[0].files.includes(zip)
+    && batches[0].files.includes(fakeImageFile) && added[0]?.ids.length === 3);
+  enter();
+  check("s2 草稿只并入 s2 文档，保留用户问题",
+    shells.get("s2").draft.includes("第二会话正文") && !shells.get("s2").draft.includes("原会话正文")
+    && shells.get("s2").draft.startsWith("用户问题"));
+  shellSnapshot.current = "s1";
+  enter();
+  check("s1 转换完成不会覆盖 s2 卡片，返回 s1 可合并原文档",
+    shells.get("s1").draft.includes("原会话正文") && !shells.get("s1").draft.includes("第二会话正文"));
+
+  let finishText;
+  shellSnapshot.current = "paste-s1";
+  pastes[0].fn({
+    clipboardData: {
+      items: [{ kind: "file", getAsFile: () => ({ name: "paste.md", type: "text/markdown", size: 20,
+        arrayBuffer: () => new Promise(resolve => { finishText = resolve; }) }) }],
+      getData: () => "剪贴板随附文字"
+    }, preventDefault() {}, stopImmediatePropagation() {}
+  });
+  shellSnapshot.current = "paste-s2";
+  finishText(new TextEncoder().encode("剪贴板附件正文").buffer);
+  await tick();
+  enter();
+  check("转换期间切换会话：剪贴板文字不写入新会话",
+    !shells.has("paste-s2") || shells.get("paste-s2").draft === "用户问题");
+  shellSnapshot.current = "paste-s1";
+  enter();
+  check("剪贴板文字与附件保留在原会话",
+    shells.get("paste-s1").draft.includes("剪贴板随附文字")
+    && shells.get("paste-s1").draft.includes("剪贴板附件正文"));
+
+  const face = clientModule.__officialFaces.attachFilesOfficially;
+  for (const rejected of [false, "throw"]) {
+    admission = rejected;
+    const before = released.length;
+    check("新版拒绝/异常：释放本次创建的附件", face([fakeImageFile], "s1") === false
+      && released.length === before + 1 && released.at(-1) === batches.at(-1).drafts);
+  }
+  admission = false;
+  const beforeRetry = released.length;
+  drop([fakeImageFile, md("rejected.md", "图片拒绝时文档仍保留")]);
+  await tick();
+  check("忙态重试仍拒绝：两次草稿都释放", released.length === beforeRetry + 2);
+  const noScope = ctx.sessions.scope;
+  ctx.sessions.scope = () => undefined;
+  const beforeMissing = batches.length;
+  drop([fakeImageFile, md("missing.md", "接口缺失时文档仍保留")]);
+  await tick();
+  check("原会话接口缺失：不创建附件、不广播全局 drop",
+    batches.length === beforeMissing && dispatchedDrops.length === 0);
+  ctx.sessions.scope = noScope;
+  check("缺少 sessionId 不创建附件", face([fakeImageFile], undefined) === null && batches.length === beforeMissing);
+  documentStub.createElement = createElement;
+  queriedComposerInput = null;
+  shellSnapshot.current = "s1";
+  delete ctx.conversation;
+  delete ctx.get;
+  delete ctx.sessions.scope;
+}
+
 // ---- 组件真实挂载（SSR）：验证产品而非框架 --------------------------------
 {
   const components = clientModule.__components;
@@ -378,6 +519,52 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
   const s2 = nextIntakeSeq("isolation-s2");
   nextIntakeSeq("isolation-s1");
   check("附件任务取消序号按会话隔离", peekIntakeSeq("isolation-s2") === s2);
+}
+
+// Real intake result/status semantics on a refused modern attachment batch.
+{
+  const state = await import("../src/client/session-state.js");
+  const bus = await import("../src/client/bus.js");
+  const { intake } = await import("../src/client/intake.js");
+  const originals = { document: globalThis.document, HTMLTextAreaElement: globalThis.HTMLTextAreaElement };
+  globalThis.document = { querySelector: selector => selector.endsWith("textarea") ? null
+    : { isContentEditable: true, getAttribute: () => null } };
+  globalThis.HTMLTextAreaElement = HTMLTextAreaElementStub;
+  state.activeSession.sessionsService = {
+    list: { getSnapshot: () => ({ current: "status-s1", byId: {} }) },
+    scope: id => ({ id }), binding: () => ({})
+  };
+  const shell = { addAttachments: () => false };
+  state.setActiveCtx({ conversation: {
+    createDrafts: (_id, files) => files.map(file => ({ id: file.name, file })),
+    releaseDraftAttachments() {}, input: { for: () => shell }
+  } });
+  try {
+    await intake([fakeImageFile], "status-s1");
+    check("拒绝挂载不谎报成功", bus.getBusState("status-s1")?.phase === "error"
+      && !bus.getBusState("status-s1").label.includes("已挂载"));
+    bus.addChips([{ name: "other.md", text: "另一会话" }], "status-s2");
+    bus.setBus({ phase: "working", label: "另一会话进度" }, "status-s2");
+    await intake([fakeImageFile, { name: "kept.md", type: "text/markdown", size: 8,
+      arrayBuffer: async () => new TextEncoder().encode("保留正文").buffer }], "status-s1");
+    check("部分失败显示错误、保留成功卡片和其他会话状态",
+      bus.getBusState("status-s1")?.phase === "error"
+      && bus.getChipsState("status-s1").items[0]?.text === "保留正文"
+      && bus.getChipsState("status-s2").items[0]?.text === "另一会话"
+      && bus.getBusState("status-s2")?.label === "另一会话进度");
+  } finally {
+    Object.assign(globalThis, originals);
+    state.setActiveCtx(null);
+    state.activeSession.sessionsService = undefined;
+  }
+}
+
+// The host can load a replacement bundle as another classic script in the same page.
+try {
+  vm.runInContext(source, context, { filename: "client-reloaded.js" });
+  check("客户端重新加载不产生全局变量重复声明", typeof windowStub.__loaded.apply === "function");
+} catch (error) {
+  check("客户端重新加载不产生全局变量重复声明", false, error.message);
 }
 
 console.log(`\n${failures === 0 ? "客户端冒烟通过 ✅" : `${failures} 项失败 ❌`}`);

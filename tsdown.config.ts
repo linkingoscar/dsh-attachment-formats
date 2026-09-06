@@ -6,7 +6,9 @@ export default defineConfig([
 	{
 		entry: { client: "src/client/index.js" },
 		outDir: "lib",
-		format: "es",
+		// 宿主以普通 script 加载并可重新加载；隔离顶层 let/const，避免重复声明。
+		format: "iife",
+		outputOptions: { entryFileNames: "client.js" },
 		platform: "browser",
 		target: "es2022",
 		minify: false,

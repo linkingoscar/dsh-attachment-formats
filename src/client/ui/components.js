@@ -111,17 +111,17 @@ function ChipPill({ item, onPreview }) {
 	}, item.key);
 }
 function AttachDock({ sessionId }) {
-	const state = useBusState();
-	const chips = useChipsState();
+	const state = useBusState(sessionId);
+	const chips = useChipsState(sessionId);
 	const [previewItem, setPreviewItem] = useState(null);
 	const mine = chips.sessionId === sessionId ? chips.items : [];
 	// 有卡片时不显示"已挂载"完成提示（卡片条本身就是状态，避免两条堆叠）
 	const showStatus = state !== null && !(mine.length > 0 && state.phase === "done");
 	useEffect(() => {
 		if (state === null || state.phase !== "done" || mine.length > 0) return;
-		const timer = setTimeout(() => setBus(null), 3000);
+		const timer = setTimeout(() => setBus(null, sessionId), 3000);
 		return () => clearTimeout(timer);
-	}, [state?.seq, state?.phase, mine.length]);
+	}, [state?.seq, state?.phase, mine.length, sessionId]);
 	if (state === null && mine.length === 0) return null;
 	const error = state !== null && state.phase === "error";
 	return jsx("div", {
@@ -171,7 +171,7 @@ function AttachDock({ sessionId }) {
 									type: "button",
 									className: "dshaf-close",
 									"aria-label": "关闭提示",
-									onClick: () => setBus(null),
+									onClick: () => setBus(null, sessionId),
 									children: "✕"
 								})
 								: null
