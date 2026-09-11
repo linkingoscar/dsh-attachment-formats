@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { createCanvas } from "@napi-rs/canvas";
 import * as plugin from "../lib/index.js";
 import { disposeOcr, TESSDATA_DIR } from "../lib/convert/ocr.js";
+import { deepseekOcrPage } from "../lib/convert/ocr-deepseek.js";
 
 const testCwd = mkdtempSync(join(tmpdir(), "dsh-ocr-test-"));
 // v0.9 隔离：DSH_HOME 指向临时目录（防读真实凭据/写真实目录），
@@ -48,6 +49,21 @@ function skip(label) {
 
 const engReady = existsSync(join(TESSDATA_DIR, "eng.traineddata.gz"));
 const chiReady = existsSync(join(TESSDATA_DIR, "chi_sim.traineddata.gz"));
+
+// Inspect the actual request without sending images or credentials to a provider.
+for (const model of [undefined, "custom-vision-model"]) {
+  let request;
+  const result = await deepseekOcrPage(Buffer.from("fixture-image"), {
+    key: "fixture-key", model,
+    fetchLike: async (_url, init) => {
+      request = JSON.parse(init.body);
+      return Response.json({ choices: [{ message: { content: "OCR fixture text" } }] });
+    }
+  });
+  check(`DeepSeek OCR ${model === undefined ? "默认新 Flash" : "保留自定义模型"}`,
+    request?.model === (model ?? "deepseek-flash") && result.text === "OCR fixture text"
+    && request.messages[0].content[1].image_url.url.startsWith("data:image/jpeg;base64,"));
+}
 
 /** 画布文字 → JPEG → 无文本层 PDF（模拟扫描件）。 */
 function buildScannedPdf(textLines) {

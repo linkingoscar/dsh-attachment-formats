@@ -384,7 +384,7 @@ function CacheSettings() {
 											className: "dshaf-settings-field",
 											children: [
 												jsx("input", { className: "dshaf-settings-input", placeholder: "Base（默认 https://api.deepseek.com）", value: cfg.ocr.deepseek?.base ?? "", onChange: (e) => setCfg((c) => ({ ...c, ocr: { ...c.ocr, deepseek: { ...c.ocr.deepseek, base: e.target.value } } })) }),
-												jsx("input", { className: "dshaf-settings-input", placeholder: "Model（默认 deepseek-v4-flash-vision-exp）", value: cfg.ocr.deepseek?.model ?? "", onChange: (e) => setCfg((c) => ({ ...c, ocr: { ...c.ocr, deepseek: { ...c.ocr.deepseek, model: e.target.value } } })) })
+												jsx("input", { className: "dshaf-settings-input", placeholder: "Model（默认 deepseek-flash）", value: cfg.ocr.deepseek?.model ?? "", onChange: (e) => setCfg((c) => ({ ...c, ocr: { ...c.ocr, deepseek: { ...c.ocr.deepseek, model: e.target.value } } })) })
 											]
 										}),
 										jsx("button", { type: "button", className: "dshaf-settings-btn", disabled: cfgSaving, onClick: () => void saveCfg({ ocr: { deepseek: cfg.ocr.deepseek } }), children: cfgSaving ? "保存中…" : "保存 DeepSeek 配置" })

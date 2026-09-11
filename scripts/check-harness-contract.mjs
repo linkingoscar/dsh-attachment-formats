@@ -4,11 +4,13 @@ import { resolve } from "node:path";
 const root = resolve(process.argv[2] ?? "");
 const tag = process.argv[3] ?? "unknown";
 if (process.argv[2] === undefined) throw new Error("用法: npm run check:harness -- <deepseek-harness checkout> <tag>");
+const ref = tag === "unknown" ? "HEAD" : tag;
+execFileSync("git", ["-C", root, "rev-parse", "--verify", `${ref}^{commit}`], { stdio: "ignore" });
 
 /** @param {string} pattern */
 function has(pattern) {
   try {
-    execFileSync("git", ["-C", root, "grep", "-F", "-l", "--", pattern, "apps", "packages"], { stdio: "ignore" });
+    execFileSync("git", ["-C", root, "grep", "-F", "-l", "-e", pattern, ref, "--", ":(glob)packages/client/**/src/**"], { stdio: "ignore" });
     return true;
   } catch {
     return false;

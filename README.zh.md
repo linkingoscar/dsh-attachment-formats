@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness 附件扩展（dsh-plugin，Codex 风格）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.12.1-informational)](#)
+[![version](https://img.shields.io/badge/version-0.12.2-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -246,11 +246,19 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
   旧版图片接口继续兼容。接口缺失或拒绝时明确报错，不再广播合成 drop。
   纯原生图片/不支持转换的格式整批放行；混合批次转换支持格式后，将其余文件
   经原生管线挂入原会话。通用文件需 dsh 0.1.3+，图片定向接口需 dsh 0.1.1+。
-- DOM 事件桥已降级为旧版宿主（无官方输入面）的回退；若其失效，症状仅出现在
-  旧版宿主上的「卡片内容没进消息」，此时可用卡片条的**发送**按钮兜底
-  （官方 submit 或合成 Enter 路径），图片路径始终不受影响。
+- 草稿合并使用官方输入面，旧宿主以 DOM 桥接回退。卡片条的**发送**按钮向
+  已挂载的原生输入框发送 Enter，遵守当前排队/插话偏好和上传等待规则。
+  若宿主更改按键处理方式，已合并的内容仍保留在草稿中，可用原生按钮发送。
 
 ## 发布版本
+
+- **v0.12.2 · 2026-09-11** —— 适配 dsh v0.1.5-rc.2：卡片发送复用宿主输入框按键处理，
+  遵守忙时排队/插话偏好及上传等待规则；DeepSeek OCR 默认模型改为
+  `deepseek-flash`，保留自定义模型。兼容检查按指定 tag 检查生产源码。
+  五组 smoke、类型检查、lint 和构建一致性检查通过；pandoc、LibreOffice
+  两项因可选工具未安装而跳过。真实 0.1.5-rc.2 宿主配合本机模拟模型，已实测
+  文档卡片发送、忙时排队与插话；云 OCR 默认模型及自定义覆盖以模拟请求验证，
+  没有付费 API 调用。更新后重启 Harness 即可，无需迁移设置。
 
 - **[v0.12.1](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.12.1)** —— 适配 dsh v0.1.3-alpha.1 的 `createDrafts` /
   `addAttachments` / `releaseDraftAttachments`；ZIP 等格式与原生上传共存，
@@ -331,7 +339,7 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
 
 提取文本与 OCR 转录仅在用户发送合并消息（文档卡片）或模型用 `read` 读取
 落盘 `doc.md` 时进入模型上下文——插件自身不提交任何内容。视觉 OCR
-（`deepseek-v4-flash-vision-exp` 或已配置的云供应商）由该供应商按 token 计费；
+（`deepseek-flash` 或已配置的云供应商）由该供应商按 token 计费；
 每批首次转录会在卡片说明中明示。索引卡在默认缓存目录（home）下写绝对路径、
 工作区模式下写相对路径，`read`/`read_image` 两种模式均可解析。
 

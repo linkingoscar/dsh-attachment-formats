@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness Attachment Expansion (dsh-plugin, Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.12.1-informational)](#)
+[![version](https://img.shields.io/badge/version-0.12.2-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -295,12 +295,23 @@ afterwards).
   where intake started. Switching conversations keeps each draft separate.
   Native attachments require a working per-session interface (dsh 0.1.1+ for
   images; 0.1.3+ for general files). Older hosts no longer receive synthetic drops.
-- The DOM event bridge is now only a fallback for hosts without the official
-  input face; if it breaks, the symptom is "card content didn't enter the
-  message" on legacy hosts only, and the card's **send** button is the
-  fallback (synthetic Enter path). The image path is never affected.
+- Draft merging uses the official input face, with a DOM bridge for older hosts.
+  The card's **send** button dispatches Enter to the mounted native composer so
+  its current queue/steer preference and upload gates apply. If a host changes
+  its keymap, the merged content remains in the draft for native submission.
 
 ## Releases
+
+- **v0.12.2 · 2026-09-11** — dsh v0.1.5-rc.2 compatibility: the card send button uses the
+  native composer keymap, preserving busy queue/steer preferences and upload gates.
+  DeepSeek OCR defaults to `deepseek-flash`; explicit model overrides remain valid.
+  Compatibility checks inspect production source at the requested tag.
+  All five smoke suites, type checking, lint and bundle consistency checks passed;
+  the pandoc and LibreOffice cases were skipped because those optional tools were
+  unavailable. Browser checks on a real 0.1.5-rc.2 host confirmed document-card
+  submission, busy queuing and steering with a local mock model. Cloud OCR default
+  selection and custom overrides were verified without paid API calls.
+  Restart Harness after updating; no settings migration is required.
 
 - **[v0.12.1](https://github.com/linkingoscar/dsh-attachment-formats/releases/tag/v0.12.1)** — compatibility with dsh v0.1.3-alpha.1: session-addressed
   `createDrafts` / `addAttachments` / `releaseDraftAttachments`; ZIP and other
@@ -401,7 +412,7 @@ afterwards).
 Extracted text and OCR transcripts enter the model context only when the user
 sends the merged message (document cards) or reads the spilled `doc.md` via
 the `read` tool — the plugin itself submits nothing. Vision OCR
-(`deepseek-v4-flash-vision-exp` or a configured cloud provider) is billed by
+(`deepseek-flash` or a configured cloud provider) is billed by
 that provider; the first transcription of a batch notes it in the card notes.
 Index cards carry absolute workspace paths (default cache home) or relative
 ones (workspace mode), so `read`/`read_image` resolve in both modes.

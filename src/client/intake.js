@@ -1,7 +1,7 @@
 // 接收管线：分类 → 本地/主机转换 → 芯片/图片分流 → 按原会话官方注入。
 import { DIRECT_TEXT_CHARS, MAX_CACHE_BYTES, MAX_TEXT_BYTES, b64ToBytes, classifyFile } from "./contract.js";
 import {
-  composerTextarea, composerReady, currentSessionId, resolveSessionId, currentCwd,
+  composerTextarea, composerInput, composerReady, currentSessionId, resolveSessionId, currentCwd,
   currentDirectLimit, currentSessionPhase, waitForSessionIdle, nextIntakeSeq, peekIntakeSeq,
 } from "./session-state.js";
 import { setBus, addChips, setChips, getBusState, getChipsState } from "./bus.js";
@@ -90,31 +90,25 @@ function mergeChipsIntoDraft() {
 }
 function sendChipsNow() {
 	if (!mergeChipsIntoDraft()) return;
+	const el = composerInput();
+	if (el !== null) {
+		try { el.focus({ preventScroll: false }); } catch { /* Focus is best-effort. */ }
+		// Let the native keymap resolve busy queue/steer preferences and upload gates.
+		el.dispatchEvent(new KeyboardEvent("keydown", {
+			key: "Enter", code: "Enter", keyCode: 13, which: 13,
+			bubbles: true, cancelable: true
+		}));
+		return;
+	}
 	const shell = inputShellOf(currentSessionId());
 	if (shell !== undefined && typeof shell.submit === "function") {
 		try {
 			shell.submit();
 			return;
 		} catch {
-			/* fall through to the synthetic-Enter path */
+			/* No mounted editor; the draft remains available for retry. */
 		}
 	}
-	const el = composerTextarea();
-	if (el === null) return;
-	try {
-		el.focus({ preventScroll: false });
-	} catch {
-		/* focus is best-effort */
-	}
-	// 合成 Enter：即使原生发送按钮因空草稿被禁用，键盘提交路径也有效
-	el.dispatchEvent(new KeyboardEvent("keydown", {
-		key: "Enter",
-		code: "Enter",
-		keyCode: 13,
-		which: 13,
-		bubbles: true,
-		cancelable: true
-	}));
 }
 
 async function intake(files, explicitSessionId) {

@@ -559,6 +559,58 @@ check("pdf drop intercepted", evPdf.prevented === true && evPdf.stopped === true
   }
 }
 
+// Card send must reach the native keymap, whose current preferences own queue/steer.
+{
+  const state = await import("../src/client/session-state.js");
+  const bus = await import("../src/client/bus.js");
+  const { sendChipsNow } = await import("../src/client/intake.js");
+  const originals = { document: globalThis.document, HTMLTextAreaElement: globalThis.HTMLTextAreaElement,
+    KeyboardEvent: globalThis.KeyboardEvent };
+  const sessionId = "send-card-s1";
+  let draft = "", phase = "plain", directSubmits = 0, nativeSubmits = 0, preferred = "queue", submitted;
+  const shell = { state: { getSnapshot: () => ({ phase, draft }) },
+    setDraft: text => { draft = text; }, submit: () => { directSubmits++; } };
+  const editor = { focus() {}, dispatchEvent(event) {
+    if (event.type === "keydown" && event.key === "Enter" && event.bubbles && event.cancelable) {
+      nativeSubmits++;
+      submitted = { mode: preferred, draft };
+    }
+  } };
+  let mounted = editor;
+  globalThis.document = { querySelector: selector => selector.endsWith("textarea") ? null : mounted };
+  globalThis.HTMLTextAreaElement = HTMLTextAreaElementStub;
+  globalThis.KeyboardEvent = class { constructor(type, options) { Object.assign(this, { type }, options); } };
+  state.activeSession.sessionsService = {
+    list: { getSnapshot: () => ({ current: sessionId }) }, scope: id => ({ id })
+  };
+  state.setActiveCtx({ conversation: { input: { for: () => shell } } });
+  try {
+    for (const mode of ["queue", "steer"]) {
+      preferred = mode;
+      draft = "说明";
+      bus.addChips([{ name: "attached.md", text: "正文" }], sessionId);
+      sendChipsNow();
+      check(`卡片发送交由原生按键处理（${mode}）`, submitted?.mode === mode
+        && submitted.draft === "说明\n\n[附件: attached.md]\n正文" && directSubmits === 0
+        && bus.getChipsState(sessionId).items.length === 0);
+    }
+    phase = "claimed";
+    bus.addChips([{ name: "keep.md", text: "保留" }], sessionId);
+    sendChipsNow();
+    check("命令占用时卡片保留且不触发发送", nativeSubmits === 2 && directSubmits === 0
+      && bus.getChipsState(sessionId).items[0]?.text === "保留");
+    phase = "plain";
+    mounted = null;
+    sendChipsNow();
+    check("输入框未挂载时仍可通过官方提交面发送已合并草稿", directSubmits === 1 && draft.includes("保留"));
+  } finally {
+    Object.assign(globalThis, originals);
+    bus.setChips([], sessionId);
+    state.setActiveCtx(null);
+    state.activeSession.sessionsService = undefined;
+  }
+}
+
 // The host can load a replacement bundle as another classic script in the same page.
 try {
   vm.runInContext(source, context, { filename: "client-reloaded.js" });
