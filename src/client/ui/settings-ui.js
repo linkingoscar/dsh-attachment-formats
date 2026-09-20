@@ -1,6 +1,6 @@
 // 设置页：附件缓存管理 + 外部服务（OCR/文档解析供应商）配置。
 import { useState, useEffect, useCallback, useRef, jsx, jsxs, Fragment } from "../runtime.js";
-import { currentCwd, activeSession, activeCtx } from "../session-state.js";
+import { currentCwd, currentSessionId, activeCtx } from "../session-state.js";
 
 const SETTINGS_NS = "attachment-formats";
 function officialScope() {
@@ -27,7 +27,7 @@ function CacheSettings() {
 		setState((current) => ({ ...current, loading: true, error: null }));
 		try {
 			const cwd = currentCwd();
-			const sessionId = activeSession?.sessionId;
+			const sessionId = currentSessionId();
 			const params = new URLSearchParams();
 			if (cwd !== undefined) params.set("cwd", cwd);
 			if (sessionId !== undefined) params.set("sessionId", sessionId);
@@ -59,7 +59,7 @@ function CacheSettings() {
 		}
 		try {
 			const cwd = currentCwd();
-			const sessionId = activeSession?.sessionId;
+			const sessionId = currentSessionId();
 			const params = new URLSearchParams();
 			if (cwd !== undefined) params.set("cwd", cwd);
 			if (sessionId !== undefined) params.set("sessionId", sessionId);
@@ -82,7 +82,7 @@ function CacheSettings() {
 			const response = await fetch(path, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ cwd: currentCwd(), sessionId: activeSession?.sessionId, ...body })
+				body: JSON.stringify({ cwd: currentCwd(), sessionId: currentSessionId(), ...body })
 			});
 			const payload = await response.json();
 			if (payload?.ok !== true) throw new Error(payload?.error?.message ?? "操作失败");
@@ -128,7 +128,7 @@ function CacheSettings() {
 		}
 		try {
 			const cwd = currentCwd();
-			const sessionId = activeSession?.sessionId;
+			const sessionId = currentSessionId();
 			const r = await fetch("/api/attach-formats/settings", {
 				method: "POST",
 				headers: { "content-type": "application/json" },

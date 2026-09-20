@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const root = resolve(process.argv[2] ?? "");
 const tag = process.argv[3] ?? "unknown";
@@ -35,3 +36,12 @@ const anchors = [...common, ...attachments, ...editor];
 const missing = anchors.filter((pattern) => !has(pattern));
 if (missing.length > 0) throw new Error(`${tag} 缺少插件依赖契约: ${missing.join(", ")}`);
 console.log(`${tag}: attachment source anchors present (${anchors.length}; run smoke:client for behavior)`);
+const listPath = execFileSync("git", ["-C", root, "grep", "-l", "export interface SessionListState", ref, "--", ":(glob)packages/**/src/**"], { encoding: "utf8" }).trim().split("\n")[0];
+const listSource = execFileSync("git", ["-C", root, "show", listPath], { encoding: "utf8" });
+const listShape = /export interface SessionListState \{([\s\S]*?)\n\}/.exec(listSource)?.[1] ?? "";
+if (!/\bcurrent[?:]/.test(listShape)) {
+  if (!listSource.includes("readonly retainedBy:") || !listSource.includes("retain(") || !has("retainedBy.mainView") || !has("data-conversation-content")) {
+    throw new Error(`${tag}: unrecognized retained-session/composer contract`);
+  }
+  execFileSync(process.execPath, ["--test", fileURLToPath(new URL("./multisession-client.test.mjs", import.meta.url))], { stdio: "inherit" });
+}

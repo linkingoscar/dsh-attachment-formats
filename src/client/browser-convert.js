@@ -126,7 +126,7 @@ async function fileSha256(file) {
  * 同源文件（P2-1）。name+size 只是候选过滤，哈希相等才算同源——
  * 同名同大小的不同内容绝不挂成 workspace ref。
  */
-async function resolveWorkspaceRef(file, cwd, sessionId) {
+async function resolveWorkspaceRef(file, cwd, sessionId, signal) {
 	try {
 		const hash = await fileSha256(file);
 		if (hash === null) return null;
@@ -134,7 +134,7 @@ async function resolveWorkspaceRef(file, cwd, sessionId) {
 		if (cwd !== undefined) params.set("cwd", cwd);
 		if (sessionId !== undefined) params.set("sessionId", sessionId);
 		const response = await fetch(`/api/attach-formats/resolve?${params.toString()}`, {
-			signal: AbortSignal.timeout(4000)
+			signal: signal === undefined ? AbortSignal.timeout(4000) : AbortSignal.any([signal, AbortSignal.timeout(4000)])
 		});
 		if (!response.ok) return null;
 		const payload = await response.json();
@@ -145,6 +145,7 @@ async function resolveWorkspaceRef(file, cwd, sessionId) {
 	}
 }
 async function convertRemote(file, kind, cwd, sessionId, directLimit, hooks = {}) {
+	hooks.signal?.throwIfAborted();
 	const params = new URLSearchParams({ name: file.name, kind });
 	if (cwd !== undefined) params.set("cwd", cwd);
 	if (sessionId !== undefined) params.set("sessionId", sessionId);
@@ -154,6 +155,9 @@ async function convertRemote(file, kind, cwd, sessionId, directLimit, hooks = {}
 	try {
 		response = await new Promise((resolve, reject) => {
 			const xhr = new XMLHttpRequest();
+			const onAbort = () => { xhr.abort(); reject(hooks.signal.reason); };
+			xhr.onloadend = () => hooks.signal?.removeEventListener("abort", onAbort);
+			hooks.signal?.addEventListener("abort", onAbort, { once: true });
 			xhr.open("POST", `${ROUTE_PATH}?${params.toString()}`);
 			xhr.responseType = "text";
 			xhr.setRequestHeader("content-type", "application/octet-stream");

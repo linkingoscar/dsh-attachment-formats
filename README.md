@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness Attachment Expansion (dsh-plugin, Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.12.2-informational)](#)
+[![version](https://img.shields.io/badge/version-0.12.3-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -301,6 +301,14 @@ afterwards).
   its keymap, the merged content remains in the draft for native submission.
 
 ## Releases
+
+- **v0.12.3 · 2026-09-20** — dsh v0.1.6-alpha.2 compatibility: uploads, paste/drop,
+  send, removal and preview target their own conversation pane. Conversions retain
+  their original session until completion, and plugin disable cancels uploads and
+  releases references. If the original pane closes before a native attachment is
+  ready, the plugin reports a retry instead of claiming a discarded draft succeeded.
+  Adds multi-pane and disable/re-enable regression checks. Restart Harness after
+  updating; no settings migration is required.
 
 - **v0.12.2 · 2026-09-11** — dsh v0.1.5-rc.2 compatibility: the card send button uses the
   native composer keymap, preserving busy queue/steer preferences and upload gates.

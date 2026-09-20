@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness 附件扩展（dsh-plugin，Codex 风格）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.12.2-informational)](#)
+[![version](https://img.shields.io/badge/version-0.12.3-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -251,6 +251,12 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
   若宿主更改按键处理方式，已合并的内容仍保留在草稿中，可用原生按钮发送。
 
 ## 发布版本
+
+- **v0.12.3 · 2026-09-20** —— 适配 dsh v0.1.6-alpha.2：上传、拖放/粘贴、发送、
+  删除和预览均绑定各自会话面板；转换期间保留原会话引用，完成后释放。
+  停用插件会取消上传并释放引用；若原面板在原生附件就绪前已关闭，会明确提示
+  返回重试，避免附件随草稿销毁却误报成功。新增多面板和停用/重新启用回归检查。
+  更新后重启 Harness 即可，无需迁移设置。
 
 - **v0.12.2 · 2026-09-11** —— 适配 dsh v0.1.5-rc.2：卡片发送复用宿主输入框按键处理，
   遵守忙时排队/插话偏好及上传等待规则；DeepSeek OCR 默认模型改为

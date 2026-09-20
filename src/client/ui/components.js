@@ -3,25 +3,25 @@ import { useState, useEffect, useRef, jsx, jsxs, Fragment, Tooltip, IconPapercli
 import { ACCEPT } from "../contract.js";
 import { useBusState, useChipsState, setBus, removeChip } from "../bus.js";
 import { sendChipsNow, intake } from "../intake.js";
-import { currentCwd, activeSession } from "../session-state.js";
+import { currentCwd } from "../session-state.js";
 
 // ---- 卡片页图灯箱（Codex 式预览：点卡片看渲染页）-------------------------
-function fileUrl(id, name) {
+function fileUrl(id, name, sessionId) {
 	const params = new URLSearchParams({ id, name });
-	const cwd = currentCwd();
-	const sessionId = activeSession?.sessionId;
+	const cwd = currentCwd(sessionId);
 	if (cwd !== undefined) params.set("cwd", cwd);
 	if (sessionId !== undefined) params.set("sessionId", sessionId);
 	return `/api/attach-formats/file?${params.toString()}`;
 }
 
-function PreviewLightbox({ preview, onClose }) {
+function PreviewLightbox({ preview, onClose, sessionId }) {
 	const [state, setState] = useState({ loading: true, pages: [], idx: 0, error: null });
 	useEffect(() => {
 		let alive = true;
+		const controller = new AbortController();
 		(async () => {
 			try {
-				const r = await fetch(fileUrl(preview.id, "manifest.json"));
+				const r = await fetch(fileUrl(preview.id, "manifest.json", sessionId), { signal: controller.signal });
 				const manifest = await r.json();
 				const pages = (Array.isArray(manifest?.files) ? manifest.files : [])
 					.filter((name) => /^pages\/p\d+\.(png|jpg)$/.test(name))
@@ -33,8 +33,8 @@ function PreviewLightbox({ preview, onClose }) {
 				if (alive) setState({ loading: false, pages: [], idx: 0, error: error instanceof Error ? error.message : String(error) });
 			}
 		})();
-		return () => { alive = false; };
-	}, [preview.id]);
+		return () => { alive = false; controller.abort(); };
+	}, [preview.id, sessionId]);
 	useEffect(() => {
 		const onKey = (event) => {
 			if (event.key === "Escape") onClose();
@@ -61,7 +61,7 @@ function PreviewLightbox({ preview, onClose }) {
 					] }),
 					state.loading || state.error !== null
 						? null
-						: jsx("img", { className: "dshaf-lightbox-img", src: fileUrl(preview.id, pageName), alt: `第 ${state.idx + 1} 页` }),
+						: jsx("img", { className: "dshaf-lightbox-img", src: fileUrl(preview.id, pageName, sessionId), alt: `第 ${state.idx + 1} 页` }),
 					state.error === null && state.pages.length > 1
 						? jsxs("div", { className: "dshaf-lightbox-nav", children: [
 							jsx("button", { type: "button", disabled: state.idx === 0, onClick: () => setState((s) => ({ ...s, idx: s.idx - 1 })), children: "上一页" }),
@@ -75,7 +75,7 @@ function PreviewLightbox({ preview, onClose }) {
 }
 
 // ---- attachment dock：文档卡片条 + 状态条 -------------------------------
-function ChipPill({ item, onPreview }) {
+function ChipPill({ item, onPreview, sessionId }) {
 	const tag = item.kind === "card" ? "索引" : item.kind === "note" ? "说明" : item.kind === "ref" ? "引用" : "全文";
 	const base = item.chars >= 1000
 		? `${(item.chars / 1000).toFixed(1)}k 字符 · ${tag}`
@@ -104,7 +104,7 @@ function ChipPill({ item, onPreview }) {
 				className: "dshaf-chip-remove",
 				"aria-label": `移除 ${item.name}`,
 				title: "移除",
-				onClick: (e) => { e.stopPropagation(); removeChip(item.key); },
+				onClick: (e) => { e.stopPropagation(); removeChip(item.key, sessionId); },
 				children: "✕"
 			})
 		]
@@ -132,12 +132,12 @@ function AttachDock({ sessionId }) {
 					className: "dshaf-chipbar",
 					children: [
 						jsx("span", { className: "dshaf-chipbar-hint", children: "附件" }),
-						...mine.map((item) => jsx(ChipPill, { item, onPreview: setPreviewItem }, item.key)),
+						...mine.map((item) => jsx(ChipPill, { item, onPreview: setPreviewItem, sessionId }, item.key)),
 						jsx("button", {
 							type: "button",
 							className: "dshaf-chip-send",
 							title: "把文档卡片并入消息并发送",
-							onClick: sendChipsNow,
+							onClick: () => sendChipsNow(sessionId),
 							children: "发送"
 						})
 					]
@@ -180,7 +180,7 @@ function AttachDock({ sessionId }) {
 				}, "status")
 				: null,
 			previewItem !== null
-				? jsx(PreviewLightbox, { preview: previewItem, onClose: () => setPreviewItem(null) }, "lightbox")
+				? jsx(PreviewLightbox, { preview: previewItem, sessionId, onClose: () => setPreviewItem(null) }, "lightbox")
 				: null
 		]
 	});
@@ -193,6 +193,7 @@ function AttachButton({ sessionId }) {
 		children: [
 			jsx("input", {
 				ref: inputRef,
+				"data-dshaf-session": sessionId,
 				type: "file",
 				multiple: true,
 				accept: ACCEPT,
@@ -228,4 +229,4 @@ function AttachButton({ sessionId }) {
 }
 
 
-export { ChipPill, AttachDock, AttachButton };
+export { ChipPill, AttachDock, AttachButton, PreviewLightbox };

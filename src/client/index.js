@@ -4,7 +4,7 @@
 // 3. 转换图片经官方注入面按会话挂入草稿栏；4. 卡片发送时经官方 setDraft 合并；
 // 5. settings.plugins.tab 缓存与供应商配置页。
 import { initRuntime } from "./runtime.js";
-import { activeSession, setActiveCtx, isComposerInputTarget, currentSessionId } from "./session-state.js";
+import { activeSession, setActiveCtx, isComposerInputTarget, eventSessionId, disposeIntakes } from "./session-state.js";
 import { injectStyles } from "./ui/styles.js";
 import { addChips } from "./bus.js";
 import { classifyFile } from "./contract.js";
@@ -38,7 +38,7 @@ window.__ModuleLoader__.load({
 					event.preventDefault();
 					event.stopImmediatePropagation();
 					window.dispatchEvent(new Event("dragend")); // 复位内建 DropOverlay
-					void intake(files);
+					void intake(files, eventSessionId(event.target) ?? "");
 				};
 				const onPasteCapture = (event) => {
 					const items = event.clipboardData?.items;
@@ -54,15 +54,18 @@ window.__ModuleLoader__.load({
 					event.preventDefault();
 					event.stopImmediatePropagation();
 					const text = event.clipboardData?.getData("text/plain") ?? "";
-					const sessionId = currentSessionId();
-					void intake(files, sessionId);
-					if (text.trim() !== "") addChips([{ name: "剪贴板", text, kind: "text" }], sessionId);
+					const sessionId = eventSessionId(event.target);
+					void intake(files, sessionId ?? "");
+					if (sessionId !== undefined && text.trim() !== "") addChips([{ name: "剪贴板", text, kind: "text" }], sessionId);
 				};
 				// 发送瞬间把文档卡片并入草稿（Enter 提交 / 主按钮点击），随后由原生提交发送
 				const onKeyDownCapture = (event) => {
 					if (event.key !== "Enter" || event.shiftKey) return;
 					if (!isComposerInputTarget(event.target)) return;
-					mergeChipsIntoDraft();
+					if (!mergeChipsIntoDraft(eventSessionId(event.target))) {
+						event.preventDefault();
+						event.stopImmediatePropagation();
+					}
 				};
 				const onClickCapture = (event) => {
 					const target = event.target;
@@ -74,13 +77,21 @@ window.__ModuleLoader__.load({
 					const buttons = card.querySelectorAll("button");
 					if (buttons.length === 0 || buttons[buttons.length - 1] !== button) return;
 					if (button.querySelector("svg rect") !== null) return; // 停止按钮：不合并
-					mergeChipsIntoDraft();
+					const sessionId = eventSessionId(target);
+					if (sessionId === undefined) return;
+					if (!mergeChipsIntoDraft(sessionId)) {
+						event.preventDefault();
+						event.stopImmediatePropagation();
+					}
 				};
 				document.addEventListener("drop", onDropCapture, true);
 				document.addEventListener("paste", onPasteCapture, true);
 				document.addEventListener("keydown", onKeyDownCapture, true);
 				document.addEventListener("click", onClickCapture, true);
 				return () => {
+					disposeIntakes();
+					setActiveCtx(null);
+					activeSession.sessionsService = undefined;
 					document.removeEventListener("drop", onDropCapture, true);
 					document.removeEventListener("paste", onPasteCapture, true);
 					document.removeEventListener("keydown", onKeyDownCapture, true);
@@ -92,10 +103,7 @@ window.__ModuleLoader__.load({
 				name: "conversation.input.left",
 				id: "attach-formats",
 				order: 20,
-				inject: (sessionId) => {
-					activeSession.sessionId = sessionId;
-					return { sessionId };
-				}
+				inject: (sessionId) => ({ sessionId })
 			}, AttachButton));
 
 			ctx.slots.inject("conversation.input.dock", () => ctx.slots.register({

@@ -91,6 +91,8 @@ const context = vm.createContext({
     }
   },
   console,
+  AbortController,
+  AbortSignal,
   setTimeout,
   clearTimeout,
   setInterval,

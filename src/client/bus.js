@@ -55,13 +55,12 @@ function addChips(entries, sessionId) {
 	setChips(next, sessionId);
 }
 
-function removeChip(key) {
-	const sessionId = currentSessionId();
+function removeChip(key, sessionId = currentSessionId()) {
 	const current = getChipsState(sessionId).items;
 	const next = current.filter((item) => item.key !== key);
 	setChips(next, sessionId);
 	// 最后一张卡片移除后，立即清掉残留的"已挂载"提示（不留 6 秒尾巴）
-	if (next.length === 0 && getBusState(sessionId)?.phase === "done") setBus(null);
+	if (next.length === 0 && getBusState(sessionId)?.phase === "done") setBus(null, sessionId);
 }
 
 
