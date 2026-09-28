@@ -17,6 +17,6 @@ export function initRuntime(require) {
   jsxs = jsxRuntime.jsxs;
   Fragment = jsxRuntime.Fragment;
   Tooltip = primitives.Tooltip;
-  IconPaperclipOutline16 = primitives.IconPaperclipOutline16;
+  IconPaperclipOutline16 = primitives.IconPaperclipOutlineRegular ?? primitives.IconPaperclipOutline16;
 }
 

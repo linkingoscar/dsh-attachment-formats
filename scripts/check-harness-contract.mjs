@@ -35,6 +35,12 @@ const editor = has("data-composer-input")
 const anchors = [...common, ...attachments, ...editor];
 const missing = anchors.filter((pattern) => !has(pattern));
 if (missing.length > 0) throw new Error(`${tag} 缺少插件依赖契约: ${missing.join(", ")}`);
+const icon = has("IconPaperclipOutlineRegular") ? "IconPaperclipOutlineRegular"
+  : has("IconPaperclipOutline16") ? "IconPaperclipOutline16" : null;
+if (icon === null) throw new Error(`${tag}: missing attachment icon export`);
+execFileSync(process.execPath, [fileURLToPath(new URL("./smoke-client.mjs", import.meta.url))], {
+  stdio: "inherit", env: { ...process.env, DSH_HARNESS_PAPERCLIP: icon }
+});
 console.log(`${tag}: attachment source anchors present (${anchors.length}; run smoke:client for behavior)`);
 const listPath = execFileSync("git", ["-C", root, "grep", "-l", "export interface SessionListState", ref, "--", ":(glob)packages/**/src/**"], { encoding: "utf8" }).trim().split("\n")[0];
 const listSource = execFileSync("git", ["-C", root, "show", listPath], { encoding: "utf8" });

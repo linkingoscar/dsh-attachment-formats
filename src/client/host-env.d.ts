@@ -13,4 +13,5 @@ interface Window {
 declare module "@deepseek-ai/dsh-client-ui-primitives" {
 	export const Tooltip: any;
 	export const IconPaperclipOutline16: (props: { size?: number; className?: string }) => any;
+	export const IconPaperclipOutlineRegular: (props: { size?: number; className?: string }) => any;
 }

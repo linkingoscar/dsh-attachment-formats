@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness Attachment Expansion (dsh-plugin, Codex-style)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.12.3-informational)](#)
+[![version](https://img.shields.io/badge/version-0.12.4-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -301,6 +301,12 @@ afterwards).
   its keymap, the merged content remains in the draft for native submission.
 
 ## Releases
+
+- **v0.12.4 · 2026-09-28** — dsh v0.1.7-rc.2 compatibility: use the renamed
+  `IconPaperclipOutlineRegular` export while retaining the older icon fallback.
+  The compatibility gate renders the attachment button using the selected host's
+  actual icon name, so missing icons can no longer hide behind a tooltip stub.
+  Restart Harness after updating; existing settings and attachments are retained.
 
 - **v0.12.3 · 2026-09-20** — dsh v0.1.6-alpha.2 compatibility: uploads, paste/drop,
   send, removal and preview target their own conversation pane. Conversions retain

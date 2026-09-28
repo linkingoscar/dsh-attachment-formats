@@ -47,7 +47,9 @@ const windowStub = {
         if (id === "react") return React;
         if (id === "react/jsx-runtime") return jsxRuntime;
         if (id === "@deepseek-ai/dsh-client-ui-primitives") {
-          return { Tooltip: () => null, IconPaperclipOutline16: () => null };
+          // 0.1.7 renamed the icon; render children so a missing icon fails this smoke.
+          const icon = process.env.DSH_HARNESS_PAPERCLIP ?? "IconPaperclipOutlineRegular";
+          return { Tooltip: ({ children }) => children, [icon]: () => null };
         }
         throw new Error(`unexpected require: ${id}`);
       });

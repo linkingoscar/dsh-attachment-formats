@@ -1,7 +1,7 @@
 # dsh-attachment-formats — DeepSeek Harness 附件扩展（dsh-plugin，Codex 风格）
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.12.3-informational)](#)
+[![version](https://img.shields.io/badge/version-0.12.4-informational)](#)
 [![harness](https://img.shields.io/badge/DeepSeek%20Harness-web%20plugin-6366f1)](https://github.com/deepseek-ai/deepseek-harness)
 [![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-6366f1)](https://github.com/topics/dsh-plugin)
 [![GitHub](https://img.shields.io/badge/GitHub-linkingoscar%2Fdsh--attachment--formats-181717)](https://github.com/linkingoscar/dsh-attachment-formats)
@@ -251,6 +251,11 @@ dsh plugin --profile web add link:path\to\dsh-attachment-formats
   若宿主更改按键处理方式，已合并的内容仍保留在草稿中，可用原生按钮发送。
 
 ## 发布版本
+
+- **v0.12.4 · 2026-09-28** —— 适配 dsh v0.1.7-rc.2：使用新版回形针图标
+  `IconPaperclipOutlineRegular`，同时保留旧版导出的回退。兼容门禁根据指定宿主
+  的实际图标名称挂载附件按钮，避免 Tooltip 测试桩隐藏缺失组件。
+  更新后重启 Harness，原有设置和附件保持不变。
 
 - **v0.12.3 · 2026-09-20** —— 适配 dsh v0.1.6-alpha.2：上传、拖放/粘贴、发送、
   删除和预览均绑定各自会话面板；转换期间保留原会话引用，完成后释放。
