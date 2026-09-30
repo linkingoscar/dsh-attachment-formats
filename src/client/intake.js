@@ -274,13 +274,13 @@ async function intake(files, explicitSessionId) {
 							}
 						} else if (result.kind === "text") {
 							const isVision = typeof result.engine === "string" && result.engine.includes("deepseek");
-							chips.push({ name: file.name, kind: "text", text: result.text, tagExtra: isVision ? "视觉" : undefined });
+							chips.push({ name: file.name, kind: "text", text: result.text, tagExtra: [isVision ? "视觉" : null, result.coverage?.status === "missing-text-pages" ? "待核对" : null].filter(Boolean).join("·") || undefined });
 						} else if (result.kind === "index") {
 							if (result.tierReason === "budget") budgetTiered = true;
 							const isVision = typeof result.engine === "string" && result.engine.includes("deepseek");
 							const visionTag = isVision ? "视觉" : undefined;
 							const budgetTag = result.tierReason === "budget" ? "余量不足" : undefined;
-							const tagExtra = visionTag && budgetTag ? `${visionTag}·${budgetTag}` : (visionTag ?? budgetTag);
+							const tagExtra = [visionTag, budgetTag, result.coverage?.status === "missing-text-pages" ? "待核对" : null].filter(Boolean).join("·") || undefined;
 							chips.push({
 								name: file.name,
 								kind: "card",

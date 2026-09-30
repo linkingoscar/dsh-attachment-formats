@@ -15,7 +15,8 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
-    "README.zh.md"
+    "README.zh.md",
+    "ROADMAP.md"
   ],
   "exports": {
     ".": "./lib/index.js",

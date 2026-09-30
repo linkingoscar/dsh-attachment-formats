@@ -65,3 +65,14 @@ test("archive XML rejects DTD/entity definitions", async () => {
   zip.file("content.xml", '<!DOCTYPE doc [<!ENTITY test SYSTEM "file:///etc/passwd">]><doc/>');
   await assert.rejects(convertPandocFormat(await zip.generateAsync({ type: "nodebuffer" }), "odt", null), /DTD\/entities/);
 });
+
+
+test("PDF text coverage reports only observed text, not visual completeness", async () => {
+  const { pdfTextCoverage, coverageNotes } = await import("../lib/convert/pdf-coverage.js");
+  const partial = pdfTextCoverage(3, [1, 1, 3]);
+  assert.deepEqual(partial, {totalPages:3,textPageCount:2,missingTextPages:[2],status:"missing-text-pages"});
+  assert.match(coverageNotes(partial)[0], /核对原文页面/);
+  assert.equal(pdfTextCoverage(2, [1,2]).status, "text-on-all-pages");
+  assert.equal(pdfTextCoverage(0, []), null);
+  assert.equal(pdfTextCoverage(3, undefined), null);
+});

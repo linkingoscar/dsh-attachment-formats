@@ -7,7 +7,7 @@
  * 运行：npm run smoke:route
  */
 import { Readable } from "node:stream";
-import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -68,9 +68,9 @@ function buildBlankPdf() {
 const fixtureBlankPdf = buildBlankPdf();
 
 /** 多行文本 PDF（Helvetica 文字层）——惰性页面图/低预算分流夹具。 */
-function buildTextPdf(lines) {
-  const ops = ["BT /F1 12 Tf 72 740 Td"]
-    .concat(lines.map((line) => `(${line}) Tj 0 -14 Td`))
+function buildTextPdf(lines, includeTextlessPage = false) {
+  const ops = [includeTextlessPage ? "BT /F1 4 Tf 72 740 Td" : "BT /F1 12 Tf 72 740 Td"]
+    .concat(lines.map((line) => `(${line}) Tj 0 -${includeTextlessPage ? 2 : 14} Td`))
     .join("\n") + "\nET";
   const objs = [
     "<< /Type /Catalog /Pages 2 0 R >>",
@@ -79,6 +79,11 @@ function buildTextPdf(lines) {
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     `<< /Length ${ops.length} >>\nstream\n${ops}\nendstream`
   ];
+  if (includeTextlessPage) {
+    objs[1] = "<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>";
+    objs.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R >>",
+      "<< /Length 0 >>\nstream\n\nendstream");
+  }
   let pdf = "%PDF-1.4\n";
   const offsets = [];
   for (let i = 0; i < objs.length; i += 1) {
@@ -295,6 +300,21 @@ console.log("\n== PDF 文字优先（小 PDF → text）==");
   check("pdf → text (not images)", result?.kind === "text", `got ${result?.kind}`);
   check("text has page marker", String(result?.text).includes("<!-- p1 -->"));
   check("text has content", String(result?.text).includes("Hello PDF page 1"));
+}
+
+console.log("\n== PDF 文本覆盖缺口：直插、缓存和索引卡一致 ==");
+{
+  const mixed = buildTextPdf(Array.from({ length: 400 }, (_, i) => `Line ${i} mixed coverage fixture, preserve this source text.`), true);
+  writeFileSync(join(root, "temp", "fixture-mixed-pages.pdf"), mixed);
+  const files = [{ name: "mixed-pages.pdf", kind: "pdf", data: mixed.toString("base64") }];
+  const first = (await callRoute(files)).body.results[0];
+  check("mixed PDF still uses its available text", first.kind === "text");
+  check("missing page explicitly reported", first.coverage?.textPageCount === 1 && first.coverage?.totalPages === 2 && first.coverage?.missingTextPages.join() === "2");
+  check("direct output warns without declaring page blank", first.text.includes("文本覆盖 1/2 页") && first.text.includes("可能为空白、扫描件或图表"));
+  const cached = (await callRoute(files)).body.results[0];
+  check("cache preserves coverage and warning", cached.engine.includes("cache") && JSON.stringify(cached.coverage) === JSON.stringify(first.coverage) && cached.text.includes("文本覆盖 1/2 页"));
+  const index = (await callRoute(files, { directLimitChars: 4096 })).body.results[0];
+  check("budget index retains missing-page warning", index.kind === "index" && index.card.includes("文本覆盖 1/2 页") && index.coverage?.missingTextPages[0] === 2);
 }
 
 console.log("\n== v0.12 二进制上传（无 base64 放大）==");
