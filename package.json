@@ -46,15 +46,17 @@
     "smoke:client": "node scripts/smoke-client.mjs && node --test scripts/multisession-client.test.mjs",
     "smoke:ocr": "node scripts/smoke-ocr.mjs",
     "smoke:p0": "node scripts/smoke-p0.mjs",
-    "smoke:all": "npm run smoke && npm run smoke:route && npm run smoke:client && npm run smoke:ocr && npm run smoke:p0",
+    "smoke:all": "npm run smoke && npm run smoke:route && npm run smoke:client && npm run smoke:ocr && npm run smoke:p0 && npm run test:document-order",
     "check:harness": "node scripts/check-harness-contract.mjs",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:document-order": "node --test scripts/document-order.test.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "@joplin/turndown-plugin-gfm": "^1.0.67",
+    "@xmldom/xmldom": "^0.8.15",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
     "mammoth": "^1.9.0",

@@ -391,3 +391,11 @@ Vision 选择首个已配置云端，失败即回退本地 tesseract.js；跨云
 ## License
 
 [Apache-2.0](LICENSE) © 2026 [linkingoscar](https://github.com/linkingoscar)
+
+## 2026-09-30 未发布修复与验证
+
+已按官方 Harness **0.2.0-rc.2** 开发预发布版（`639ed015397290b3745d163aafe02ffee4aa3f84`）验证源码契约、既有输入框/多会话行为测试及真实宿主的认证上传转换、未认证拒绝。兼容矩阵保留旧版本并加入新版本；不等同于完整浏览器视觉验收。
+
+PPTX 改按 presentation.xml 的关系顺序读页，排除孤立页并明确报告断链；ODT 兜底保持标题/正文交错顺序及标题层级；EPUB 兜底按 OPF spine 顺序读取，排除导航及非线性附属内容，缺失元数据/断链/不支持的正文类型明确报错。包内 XML 使用命名空间解析，禁止 DTD/实体定义及外部取资源。`npm run test:document-order` 可单独复验。Pandoc EPUB 测试夹具已补齐正确 OPF 包结构。
+
+Python 引擎、OCR 语言文件缺失时相关可选测试会跳过，不把离线测试通过当作可选后端已验证。

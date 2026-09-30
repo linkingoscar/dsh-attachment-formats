@@ -78,8 +78,9 @@ async function buildEpub() {
   zip.file("mimetype", "application/epub+zip");
   zip.file(
     "META-INF/container.xml",
-    '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.xhtml" media-type="application/xhtml+xml"/></rootfiles></container>'
+    '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'
   );
+  zip.file("OEBPS/content.opf", '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="book-id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="book-id">test-book</dc:identifier><dc:title>Test</dc:title><dc:language>zh</dc:language></metadata><manifest><item id="chapter" href="content.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chapter"/></spine></package>');
   zip.file(
     "OEBPS/content.xhtml",
     '<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><body><h1>章节一</h1><p>正文内容 ABC</p></body></html>'

@@ -474,3 +474,11 @@ cross-cloud retry is opt-in. All backends are optional and no heavyweight model 
 ## License
 
 [Apache-2.0](LICENSE) © 2026 [linkingoscar](https://github.com/linkingoscar)
+
+## 2026-09-30 compatibility verification (unreleased)
+
+Verified against official Harness **0.2.0-rc.2** (developer prerelease; commit `639ed015397290b3745d163aafe02ffee4aa3f84`), including source contracts, existing composer/session behavior tests, and authenticated upload/conversion plus unauthenticated rejection on a real linked-plugin host. This is not a full browser visual audit. Existing CI compatibility tags are retained and the new release is added.
+
+PPTX extraction now follows `presentation.xml` relationships rather than storage filenames, excludes orphan slides and rejects broken references. ODT fallback preserves interleaved headings/paragraphs and heading levels. EPUB fallback follows the OPF spine instead of sorted filenames; auxiliary/nonlinear and navigation documents are excluded. Broken/missing metadata or unsupported spine media produce an explicit error. Package metadata is parsed namespace-aware without DTD/entity expansion or external resource fetching. Run `npm run test:document-order` for targeted regressions. The EPUB pandoc smoke fixture now contains a valid OPF package rather than incorrectly pointing its container at XHTML.
+
+Optional Python-engine/OCR language-data tests can skip when those dependencies are absent; a successful offline suite is not evidence that those optional backends were exercised.
